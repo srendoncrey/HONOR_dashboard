@@ -11,7 +11,8 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0a0a;--sf:#111;--sf2:#1a1a1a;--sf3:#222;--cyan:#00B1FF;--pink:#FF00D0;--purple:#7B00FF;--teal:#00D4AA;--amber:#FFB800;--coral:#FF6B35;--red:#FF4444;--white:#fff;--text:#e8e8e8;--muted:#888;--brd:#2a2a2a;--font:'DM Sans',sans-serif;--mono:'Space Mono',monospace}
+:root{--bg:#0a0a0a;--sf:#111;--sf2:#1a1a1a;--sf3:#222;--cyan:#00B1FF;--pink:#FF00D0;--purple:#7B00FF;--teal:#00D4AA;--amber:#FFB800;--coral:#FF6B35;--red:#FF4444;--white:#fff;--text:#e8e8e8;--muted:#888;--brd:#2a2a2a;--grid:#1f1f1f;--font:'DM Sans',sans-serif;--mono:'Space Mono',monospace}
+:root.light{--bg:#f5f5f7;--sf:#fff;--sf2:#eee;--sf3:#e0e0e0;--white:#111;--text:#222;--muted:#666;--brd:#d0d0d0;--grid:#e0e0e0;--cyan:#0090D0;--pink:#CC00A8;--purple:#5E00CC;--teal:#00A888;--amber:#D09800;--coral:#D05020;--red:#CC2222}
 body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
 .topbar{position:sticky;top:0;z-index:200;background:var(--bg);border-bottom:1px solid var(--brd);padding:.5rem 1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem}
 .topbar::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--cyan),var(--pink),var(--purple))}
@@ -82,12 +83,13 @@ footer{text-align:center;padding:1.5rem;font-family:var(--mono);font-size:.5rem;
 </div>
 </div>
 <div style="display:flex;align-items:center;gap:.6rem">
-<span style="font-size:.55rem;color:var(--muted);font-family:var(--mono)">Q1 2026 · S1–S13</span>
+<span style="font-size:.55rem;color:var(--muted);font-family:var(--mono)">Q1 2026 · S1–S15</span>
 <div class="fg" id="lgF">
 <button class="lb on" data-lang="es">ES</button>
 <button class="lb" data-lang="en">EN</button>
 <button class="lb" data-lang="cn">中文</button>
 </div>
+<button class="lb" id="themeBtn" onclick="toggleTheme()" title="Light/Dark mode" style="font-size:.65rem;padding:.25rem .55rem">☀</button>
 </div>
 </div>
 
@@ -248,8 +250,12 @@ let lang='es',ch='SI',charts={};
 const fmt=n=>n.toLocaleString('es-ES'),fmtE=n=>Math.round(n).toLocaleString('es-ES')+' €';
 function dc(){Object.values(charts).forEach(c=>{if(c&&c.destroy)c.destroy()});charts={}}
 function safeChart(id,cfg){const el=document.getElementById(id);if(!el)return null;try{return new Chart(el,cfg)}catch(e){console.warn('Chart '+id+':',e.message);return null}}
-const cB={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#aaa',font:{family:'DM Sans',size:9},boxWidth:9,padding:8}},tooltip:{backgroundColor:'#1a1a1a',borderColor:'#333',borderWidth:1,padding:7}},scales:{x:{ticks:{color:'#888',font:{family:'DM Sans',size:8}},grid:{color:'#1f1f1f'}},y:{ticks:{color:'#888',font:{family:'DM Sans',size:8}},grid:{color:'#1f1f1f'}}}};
-const donutOpts={responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{color:'#aaa',font:{family:'DM Sans'},padding:10,boxWidth:9}}}};
+function gC(){return getComputedStyle(document.documentElement).getPropertyValue('--grid').trim()||'#1f1f1f'}
+function gM(){return getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()||'#888'}
+function gT(){return getComputedStyle(document.documentElement).getPropertyValue('--text').trim()||'#e8e8e8'}
+const cB={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{get color(){return gM()},font:{family:'DM Sans',size:9},boxWidth:9,padding:8}},tooltip:{get backgroundColor(){return document.documentElement.classList.contains('light')?'#fff':'#1a1a1a'},get borderColor(){return document.documentElement.classList.contains('light')?'#ccc':'#333'},borderWidth:1,padding:7}},scales:{x:{ticks:{get color(){return gM()},font:{family:'DM Sans',size:8}},grid:{get color(){return gC()}}},y:{ticks:{get color(){return gM()},font:{family:'DM Sans',size:8}},grid:{get color(){return gC()}}}}};
+const donutOpts={responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{get color(){return gM()},font:{family:'DM Sans'},padding:10,boxWidth:9}}}};
+function toggleTheme(){const r=document.documentElement;r.classList.toggle('light');const b=document.getElementById('themeBtn');b.textContent=r.classList.contains('light')?'☾':'☀';dc();render();renderWeekly();renderMap(D[ch]);renderPromotores();renderSimulador()}
 
 function render(){
 const d=D[ch];if(!d)return;const k=d.kpis;dc();
@@ -260,38 +266,39 @@ document.getElementById('kG').innerHTML=[
 ].map(x=>`<div class="kpi"><div class="kl">${x.l}</div><div class="kv">${x.v}</div><div class="ks">${x.s}</div></div>`).join('');
 
 // Gama donut
-if(d.gamas.length){charts.gama=safeChart('cGama',{type:'doughnut',data:{labels:d.gamas.map(g=>g.n),datasets:[{data:d.gamas.map(g=>g.u),backgroundColor:[CC.cyan,CC.pink,CC.teal,CC.amber],borderColor:'#111',borderWidth:2}]},options:{...donutOpts,plugins:{...donutOpts.plugins,tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' uds ('+Math.round(c.parsed/k.units*100)+'%)'}}}}})}
+if(d.gamas.length){charts.gama=safeChart('cGama',{type:'doughnut',data:{labels:d.gamas.map(g=>g.n),datasets:[{data:d.gamas.map(g=>g.u),backgroundColor:[CC.cyan,CC.pink,CC.teal,CC.amber],borderColor:document.documentElement.classList.contains('light')?'#fff':'#111',borderWidth:2}]},options:{...donutOpts,plugins:{...donutOpts.plugins,tooltip:{callbacks:{label:c=>c.label+': '+fmt(c.parsed)+' uds ('+Math.round(c.parsed/k.units*100)+'%)'}}}}})}
 // Zona donut
-if(d.zonas.length){charts.zona=safeChart('cZona',{type:'doughnut',data:{labels:d.zonas.map(z=>z.n),datasets:[{data:d.zonas.map(z=>z.f),backgroundColor:[CC.cyan,CC.pink,CC.purple,CC.teal],borderColor:'#111',borderWidth:2}]},options:{...donutOpts,plugins:{...donutOpts.plugins,tooltip:{callbacks:{label:c=>c.label+': '+fmtE(c.parsed)}}}}})}
+if(d.zonas.length){charts.zona=safeChart('cZona',{type:'doughnut',data:{labels:d.zonas.map(z=>z.n),datasets:[{data:d.zonas.map(z=>z.f),backgroundColor:[CC.cyan,CC.pink,CC.purple,CC.teal],borderColor:document.documentElement.classList.contains('light')?'#fff':'#111',borderWidth:2}]},options:{...donutOpts,plugins:{...donutOpts.plugins,tooltip:{callbacks:{label:c=>c.label+': '+fmtE(c.parsed)}}}}})}
 // Monthly
-if(d.meses.length){charts.mes=safeChart('cMes',{type:'bar',data:{labels:d.meses.map(m=>m.n),datasets:[{label:t('units'),data:d.meses.map(m=>m.u),backgroundColor:[CC.cyan,CC.cyan+'99',CC.cyan+'55'],borderRadius:5,yAxisID:'y',order:2},{label:'K€',data:d.meses.map(m=>Math.round(m.f/1000)),type:'line',borderColor:CC.pink,pointBackgroundColor:CC.pink,pointRadius:5,borderWidth:2.5,tension:.3,yAxisID:'y1',order:1}]},options:{...cB,scales:{x:{grid:{display:false}},y:{position:'left',ticks:{color:'#888'},grid:{color:'#1f1f1f'}},y1:{position:'right',ticks:{color:CC.pink},grid:{drawOnChartArea:false}}}}})}
+if(d.meses.length){charts.mes=safeChart('cMes',{type:'bar',data:{labels:d.meses.map(m=>m.n),datasets:[{label:t('units'),data:d.meses.map(m=>m.u),backgroundColor:[CC.cyan,CC.cyan+'99',CC.cyan+'55'],borderRadius:5,yAxisID:'y',order:2},{label:'K€',data:d.meses.map(m=>Math.round(m.f/1000)),type:'line',borderColor:CC.pink,pointBackgroundColor:CC.pink,pointRadius:5,borderWidth:2.5,tension:.3,yAxisID:'y1',order:1}]},options:{...cB,scales:{x:{grid:{display:false}},y:{position:'left',ticks:{color:'#888'},grid:{color:gC()}},y1:{position:'right',ticks:{color:CC.pink},grid:{drawOnChartArea:false}}}}})}
 // Weekly line
 const wK=Object.keys(d.weekly).map(Number).sort((a,b)=>a-b);
-if(wK.length){charts.sem=safeChart('cSem',{type:'line',data:{labels:wK.map(w=>'S'+w),datasets:[{data:wK.map(w=>d.weekly[w]),borderColor:CC.cyan,backgroundColor:CC.cyan+'15',fill:true,tension:.35,pointRadius:3,borderWidth:2.5}]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1f1f1f'}}}}})}
+if(wK.length){charts.sem=safeChart('cSem',{type:'line',data:{labels:wK.map(w=>'S'+w),datasets:[{data:wK.map(w=>d.weekly[w]),borderColor:CC.cyan,backgroundColor:CC.cyan+'15',fill:true,tension:.35,pointRadius:3,borderWidth:2.5}]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:gC()}}}}})}
 // Map
 const mc=document.getElementById('mapC');
 if(ch==='SI'&&mc){mc.style.display='';renderMap(d)}else if(mc){mc.style.display='none'}
 // 400 vs MAGIC
 const sg=d.semGama||{};const g4=sg['400']||[];const gM=sg['MAGIC']||[];
-if(g4.length){charts.vs=safeChart('cVs',{type:'line',data:{labels:g4.map((_,i)=>'S'+(i+1)),datasets:[{label:'400',data:g4,borderColor:CC.cyan,backgroundColor:CC.cyan+'12',fill:true,tension:.35,pointRadius:3,borderWidth:2.5},{label:'MAGIC',data:gM,borderColor:CC.pink,backgroundColor:CC.pink+'12',fill:true,tension:.35,pointRadius:3,borderWidth:2.5}]},options:{...cB,scales:{x:{grid:{display:false}},y:{grid:{color:'#1f1f1f'}}}}})}
+if(g4.length){charts.vs=safeChart('cVs',{type:'line',data:{labels:g4.map((_,i)=>'S'+(i+1)),datasets:[{label:'400',data:g4,borderColor:CC.cyan,backgroundColor:CC.cyan+'12',fill:true,tension:.35,pointRadius:3,borderWidth:2.5},{label:'MAGIC',data:gM,borderColor:CC.pink,backgroundColor:CC.pink+'12',fill:true,tension:.35,pointRadius:3,borderWidth:2.5}]},options:{...cB,scales:{x:{grid:{display:false}},y:{grid:{color:gC()}}}}})}
 
 // PRODUCTO
 const t12=d.models.slice(0,12);const gC=n=>n.includes('400')?CC.cyan:(n.includes('MAGIC')||n.includes('V5'))?CC.pink:CC.teal;
-if(t12.length){charts.mod=safeChart('cMod',{type:'bar',data:{labels:t12.map(m=>m.n.length>20?m.n.slice(0,18)+'…':m.n),datasets:[{data:t12.map(m=>m.u),backgroundColor:t12.map(m=>gC(m.n)),borderRadius:3}]},options:{...cB,indexAxis:'y',plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{color:'#1f1f1f'}},y:{ticks:{color:'#bbb',font:{size:7}},grid:{display:false}}}}})}
-if(d.cats.length){charts.cat=safeChart('cCat',{type:'bar',data:{labels:d.cats.map(c=>c.n),datasets:[{label:t('units'),data:d.cats.map(c=>c.u),backgroundColor:[CC.teal,CC.cyan,CC.pink,CC.amber],borderRadius:5},{label:'K€',data:d.cats.map(c=>Math.round(c.f/1000)),backgroundColor:[CC.teal+'55',CC.cyan+'55',CC.pink+'55',CC.amber+'55'],borderRadius:5}]},options:{...cB,scales:{x:{grid:{display:false}},y:{grid:{color:'#1f1f1f'}}}}})}
+if(t12.length){charts.mod=safeChart('cMod',{type:'bar',data:{labels:t12.map(m=>m.n.length>20?m.n.slice(0,18)+'…':m.n),datasets:[{data:t12.map(m=>m.u),backgroundColor:t12.map(m=>gC(m.n)),borderRadius:3}]},options:{...cB,indexAxis:'y',plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{color:gC()}},y:{ticks:{color:gM(),font:{size:7}},grid:{display:false}}}}})}
+if(d.cats.length){charts.cat=safeChart('cCat',{type:'bar',data:{labels:d.cats.map(c=>c.n),datasets:[{label:t('units'),data:d.cats.map(c=>c.u),backgroundColor:[CC.teal,CC.cyan,CC.pink,CC.amber],borderRadius:5},{label:'K€',data:d.cats.map(c=>Math.round(c.f/1000)),backgroundColor:[CC.teal+'55',CC.cyan+'55',CC.pink+'55',CC.amber+'55'],borderRadius:5}]},options:{...cB,scales:{x:{grid:{display:false}},y:{grid:{color:gC()}}}}})}
 // Model table
 const mxU=t12.length?t12[0].u:1;
 document.getElementById('thM').innerHTML='<tr><th>#</th><th>'+t('thModel')+'</th><th>'+t('thGama')+'</th><th>'+t('thUds')+'</th><th>'+t('thFact')+'</th><th>'+t('thTicket')+'</th><th>'+t('thPct')+'</th><th></th></tr>';
 document.getElementById('tbM').innerHTML=d.models.slice(0,15).map((m,i)=>{const tk=m.u?Math.round(m.f/m.u):0;const gc=m.n.includes('400')?'cyan':(m.n.includes('MAGIC')||m.n.includes('V5'))?'pink':'teal';return`<tr><td style="font-family:var(--mono);color:var(--muted)">${i+1}</td><td><strong>${m.n}</strong></td><td><span class="pb" style="color:var(--${gc});background:var(--${gc})15">${m.n.includes('400')?'400':m.n.includes('MAGIC')||m.n.includes('V5')?'MAGIC':'X'}</span></td><td>${fmt(m.u)}</td><td>${fmtE(m.f)}</td><td>${fmtE(tk)}</td><td>${(m.u/k.units*100).toFixed(1)}%</td><td class="bc"><div class="bbg"><div class="bf" style="width:${m.u/mxU*100}%;background:var(--${gc})"></div></div></td></tr>`}).join('');
 
 // TIENDAS
-if(d.tiendas.length){const tT=d.tiendas.slice(0,15);charts.ti=safeChart('cTi',{type:'bar',data:{labels:tT.map(t=>t.n.replace('ECI ','')),datasets:[{data:tT.map(t=>t.u),backgroundColor:tT.map((_,i)=>i<3?[CC.amber,'#C0C0C0','#CD7F32'][i]:CC.cyan),borderRadius:3}]},options:{...cB,indexAxis:'y',plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{color:'#1f1f1f'}},y:{ticks:{color:'#bbb',font:{size:7}},grid:{display:false}}}}})}
+if(d.tiendas.length){const tT=d.tiendas.slice(0,15);charts.ti=safeChart('cTi',{type:'bar',data:{labels:tT.map(t=>t.n.replace('ECI ','')),datasets:[{data:tT.map(t=>t.u),backgroundColor:tT.map((_,i)=>i<3?[CC.amber,'#C0C0C0','#CD7F32'][i]:CC.cyan),borderRadius:3}]},options:{...cB,indexAxis:'y',plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{color:gC()}},y:{ticks:{color:gM(),font:{size:7}},grid:{display:false}}}}})}
 // Zone x Month
 if(d.meses.length&&Object.keys(d.semZona).length){const zC={Centro:CC.cyan,Norte:CC.pink,Sur:CC.purple,Noreste:CC.teal};
-const zDS=Object.entries(d.semZona).map(([z,vals])=>{const mo=[0,0,0];[[1,2,3,4,5],[6,7,8,9],[10,11,12,13]].forEach((ss,mi)=>{mo[mi]=ss.reduce((s,w)=>(vals[w-1]||0)+s,0)});return{label:z,data:mo,borderColor:zC[z]||CC.coral,pointBackgroundColor:zC[z]||CC.coral,borderWidth:2.5,tension:.3,pointRadius:3}});
-charts.zm=safeChart('cZM',{type:'line',data:{labels:d.meses.map(m=>m.n),datasets:zDS},options:{...cB,scales:{x:{grid:{display:false}},y:{grid:{color:'#1f1f1f'}}}}})}
+const nW=Object.keys(d.weekly||{}).length||13;const nMes=d.meses.length;const wkMap=[];{let w=1;for(let i=0;i<nMes;i++){const cnt=i===0?5:4;const end=i===nMes-1?nW:Math.min(w+cnt-1,nW);const s=[];for(let j=w;j<=end;j++)s.push(j);wkMap.push(s);w=end+1}}
+const zDS=Object.entries(d.semZona).map(([z,vals])=>{const mo=wkMap.map(ss=>ss.reduce((s,w)=>(vals[w-1]||0)+s,0));return{label:z,data:mo,borderColor:zC[z]||CC.coral,pointBackgroundColor:zC[z]||CC.coral,borderWidth:2.5,tension:.3,pointRadius:3}});
+charts.zm=safeChart('cZM',{type:'line',data:{labels:d.meses.map(m=>m.n),datasets:zDS},options:{...cB,scales:{x:{grid:{display:false}},y:{grid:{color:gC()}}}}})}
 // Day
-if(d.dias.length){const dM=Math.max(...d.dias.map(x=>x.u));charts.dia=safeChart('cDia',{type:'bar',data:{labels:d.dias.map(x=>x.n.slice(0,3)),datasets:[{data:d.dias.map(x=>x.u),backgroundColor:d.dias.map(x=>x.u===dM?CC.cyan:CC.cyan+'55'),borderRadius:5}]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1f1f1f'}}}}})}
+if(d.dias.length){const dM=Math.max(...d.dias.map(x=>x.u));charts.dia=safeChart('cDia',{type:'bar',data:{labels:d.dias.map(x=>x.n.slice(0,3)),datasets:[{data:d.dias.map(x=>x.u),backgroundColor:d.dias.map(x=>x.u===dM?CC.cyan:CC.cyan+'55'),borderRadius:5}]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:gC()}}}}})}
 // Store table
 const txU=d.tiendas.length?d.tiendas[0].u:1;
 document.getElementById('thT').innerHTML='<tr><th>#</th><th>'+t('thStore')+'</th><th>'+t('thZone')+'</th><th>'+t('thUds')+'</th><th>'+t('thFact')+'</th><th>'+t('thTicket')+'</th><th>'+t('thPct')+'</th><th></th></tr>';
@@ -310,7 +317,7 @@ const STORE_PROV={
 'ECI PAMPLONA':'Navarra','ECI SAN JOSE VALDERAS':'Madrid','ECI ALCALA DE HENARES':'Madrid',
 'ECI ZARAGOZA':'Zaragoza','ECI LA CORUÑA':'A Coruña','ECI PLAZA DEL DUQUE':'Sevilla',
 'ECI RONDA DE CORDOBA':'Córdoba','ECI SALAMANCA':'Salamanca','ECI LEON':'León',
-'ECI COSTA LUZ':'Cádiz','ECI COSTA MIJAS':'Málaga','ECI BAHIA MALAGA':'Málaga',
+'ECI COSTA LUZ':'Huelva','ECI COSTA MIJAS':'Málaga','ECI BAHIA MALAGA':'Málaga',
 'ECI CORNELLA':'Barcelona'
 };
 // Store coordinates (approx city center)
@@ -487,7 +494,7 @@ charts.wkC=safeChart('cWkC',{type:'bar',data:{labels:top.map(s=>s.n.replace('ECI
 {label:'S'+w,data:top.map(s=>s.u),backgroundColor:CC.cyan,borderRadius:3},
 {label:prev?'S'+prev:'—',data:top.map(s=>s.uP),backgroundColor:CC.pink+'88',borderRadius:3},
 {label:t('wkMedia'),data:top.map(s=>s.uAvg),backgroundColor:CC.teal+'55',borderRadius:3}
-]},options:{...cB,indexAxis:'y',scales:{x:{grid:{color:'#1f1f1f'}},y:{ticks:{color:'#bbb',font:{size:7}},grid:{display:false}}}}});}
+]},options:{...cB,indexAxis:'y',scales:{x:{grid:{color:gC()}},y:{ticks:{color:gM(),font:{size:7}},grid:{display:false}}}}});}
 
 // Table
 const maxU=top.length?Math.max(...top.map(s=>s.u),1):1;
@@ -525,14 +532,14 @@ if(charts.pH)charts.pH.destroy();if(charts.pD)charts.pD.destroy();if(charts.inc)
 charts.pH=safeChart('cPH',{type:'bar',data:{
 labels:stores.map(([n])=>n.replace('ECI ','')),
 datasets:[{data:stores.map(([_,v])=>v.salesPerHour),backgroundColor:stores.map(([_,v])=>v.salesPerHour>=(totS/totH)?CC.cyan:CC.cyan+'55'),borderRadius:3}]
-},options:{...cB,indexAxis:'y',plugins:{...cB.plugins,legend:{display:false},annotation:{}},scales:{x:{grid:{color:'#1f1f1f'}},y:{ticks:{color:'#bbb',font:{size:7}},grid:{display:false}}}}});
+},options:{...cB,indexAxis:'y',plugins:{...cB.plugins,legend:{display:false},annotation:{}},scales:{x:{grid:{color:gC()}},y:{ticks:{color:gM(),font:{size:7}},grid:{display:false}}}}});
 
 // Sales per work day
 const stD=stores.slice().sort((a,b)=>b[1].salesPerWorkDay-a[1].salesPerWorkDay);
 charts.pD=safeChart('cPD',{type:'bar',data:{
 labels:stD.map(([n])=>n.replace('ECI ','')),
 datasets:[{data:stD.map(([_,v])=>v.salesPerWorkDay),backgroundColor:stD.map(([_,v])=>v.salesPerWorkDay>=(totS/totW)?CC.pink:CC.pink+'55'),borderRadius:3}]
-},options:{...cB,indexAxis:'y',plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{color:'#1f1f1f'}},y:{ticks:{color:'#bbb',font:{size:7}},grid:{display:false}}}}});
+},options:{...cB,indexAxis:'y',plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{color:gC()}},y:{ticks:{color:gM(),font:{size:7}},grid:{display:false}}}}});
 
 // Presence vs Absence chart
 // D.promotores has workDays and totalDays per store
@@ -559,78 +566,69 @@ labels:presData.map(x=>x.n.replace('ECI ','')),
 datasets:[
 {label:t('pmWithPromotor')||'Con promotor',data:presData.map(x=>x.salesWork),backgroundColor:CC.cyan,borderRadius:3},
 {label:t('pmWithoutPromotor')||'Sin promotor (ECI)',data:presData.map(x=>x.salesLibre),backgroundColor:CC.amber+'88',borderRadius:3}
-]},options:{...cB,indexAxis:'y',plugins:{...cB.plugins},scales:{x:{stacked:true,grid:{color:'#1f1f1f'}},y:{stacked:true,ticks:{color:'#bbb',font:{size:7}},grid:{display:false}}}}});
+]},options:{...cB,indexAxis:'y',plugins:{...cB.plugins},scales:{x:{stacked:true,grid:{color:gC()}},y:{stacked:true,ticks:{color:gM(),font:{size:7}},grid:{display:false}}}}});
 
 
 
 // Monthly productivity per store (uds/workday by month)
 if(charts.pE)charts.pE.destroy();
 const pmStoreNames=stores.map(([n])=>n.replace('ECI ',''));
-// Approximate monthly split: Ene=S1-S5, Feb=S6-S9, Mar=S10-S13
-const siD=D.SI;
+const siD=D.SI;const pmNW=Object.keys(siD.weekly||{}).length||13;const pmNM=siD.meses.length;
+const pmWkMap=[];{let w=1;for(let i=0;i<pmNM;i++){const cnt=i===0?5:4;const end=i===pmNM-1?pmNW:Math.min(w+cnt-1,pmNW);const s=[];for(let j=w;j<=end;j++)s.push(j);pmWkMap.push(s);w=end+1}}
+const pmColors=[CC.cyan,CC.pink,CC.teal,CC.amber,CC.purple,CC.coral];
 const pmMonthly=stores.map(([n,v])=>{
 const st=siD.semTienda[n]||{};
-const ene=[1,2,3,4,5].reduce((a,w)=>a+(st[w]||0),0);
-const feb=[6,7,8,9].reduce((a,w)=>a+(st[w]||0),0);
-const mar=[10,11,12,13].reduce((a,w)=>a+(st[w]||0),0);
-const wd=v.workDays;const mwd=Math.round(wd/3);
-return{n:n.replace('ECI ',''),ene:mwd?+(ene/mwd).toFixed(1):0,feb:mwd?+(feb/mwd).toFixed(1):0,mar:mwd?+(mar/mwd).toFixed(1):0}
+const wd=v.workDays;const mwd=Math.round(wd/pmNM);
+const vals=pmWkMap.map(ss=>ss.reduce((a,w)=>a+(st[w]||0),0));
+return{n:n.replace('ECI ',''),vals,mwd}
 });
 charts.pE=safeChart('cPE',{type:'bar',data:{
 labels:pmMonthly.map(x=>x.n),
-datasets:[
-{label:t('mEne')||'Enero',data:pmMonthly.map(x=>x.ene),backgroundColor:CC.cyan,borderRadius:3},
-{label:t('mFeb')||'Febrero',data:pmMonthly.map(x=>x.feb),backgroundColor:CC.pink,borderRadius:3},
-{label:t('mMar')||'Marzo',data:pmMonthly.map(x=>x.mar),backgroundColor:CC.teal,borderRadius:3}
-]},options:{...cB,indexAxis:'y',scales:{x:{grid:{color:'#1f1f1f'}},y:{ticks:{color:'#bbb',font:{size:7}},grid:{display:false}}}}});
+datasets:siD.meses.map((m,mi)=>({label:m.n,data:pmMonthly.map(x=>x.mwd?+(x.vals[mi]/x.mwd).toFixed(1):0),backgroundColor:pmColors[mi%pmColors.length],borderRadius:3}))
+},options:{...cB,indexAxis:'y',scales:{x:{grid:{color:gC()}},y:{ticks:{color:gM(),font:{size:7}},grid:{display:false}}}}});
 
-const incStores=[...new Set(inc.filter(x=>x.month==='Enero').map(x=>x.store))];
-const incEne=incStores.map(s=>{const r=inc.find(x=>x.store===s&&x.month==='Enero');return r?r.pct*100:0});
-const incFeb=incStores.map(s=>{const r=inc.find(x=>x.store===s&&x.month==='Febrero');return r?r.pct*100:0});
-const incMar=incStores.map(s=>{const r=inc.find(x=>x.store===s&&x.month==='Marzo');return r?r.pct*100:0});
+const incStores=[...new Set(inc.map(x=>x.store))];
+const incMOrd={Noviembre:1,Diciembre:2,Enero:3,Febrero:4,Marzo:5,Abril:6,Mayo:7,Junio:8,Julio:9,Agosto:10,Septiembre:11,Octubre:12};
+const incMAbr={Noviembre:'Nov',Diciembre:'Dic',Enero:'Ene',Febrero:'Feb',Marzo:'Mar',Abril:'Abr',Mayo:'May',Junio:'Jun',Julio:'Jul',Agosto:'Ago',Septiembre:'Sep',Octubre:'Oct'};
+const incMonths=[...new Set(inc.map(x=>x.month))].sort((a,b)=>(incMOrd[a]||13)-(incMOrd[b]||13));
+const incColors=[CC.purple+'88',CC.coral,CC.cyan,CC.pink,CC.teal,CC.amber];
+const incData={};incMonths.forEach(m=>{incData[m]=incStores.map(s=>{const r=inc.find(x=>x.store===s&&x.month===m);return r?r.pct*100:0})});
 
 // Incentivos grouped bar
-
 charts.inc=safeChart('cInc',{type:'bar',data:{
 labels:incStores.map(s=>s.replace('ECI ','').slice(0,15)),
-datasets:[
-{label:t('mEne')||'Enero',data:incEne,backgroundColor:CC.cyan,borderRadius:3},
-{label:t('mFeb')||'Febrero',data:incFeb,backgroundColor:CC.pink,borderRadius:3},
-{label:t('mMar')||'Marzo',data:incMar,backgroundColor:CC.teal,borderRadius:3}
-]},options:{...cB,scales:{x:{ticks:{color:'#888',font:{size:7},maxRotation:45},grid:{display:false}},y:{ticks:{color:'#888',callback:v=>v+'%'},grid:{color:'#1f1f1f'}}},plugins:{...cB.plugins}},plugins:[{id:'line100',afterDraw(chart){const y=chart.scales.y.getPixelForValue(100);if(y){const ctx=chart.ctx;ctx.save();ctx.beginPath();ctx.setLineDash([6,4]);ctx.moveTo(chart.chartArea.left,y);ctx.lineTo(chart.chartArea.right,y);ctx.strokeStyle='#FFB800';ctx.lineWidth=2;ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#FFB800';ctx.font='bold 10px DM Sans';ctx.textAlign='right';ctx.fillText('100%',chart.chartArea.right,y-5);ctx.restore()}}}]});
+datasets:incMonths.map((m,i)=>({label:incMAbr[m]||m,data:incData[m],backgroundColor:incColors[i%incColors.length],borderRadius:3}))
+},options:{...cB,scales:{x:{ticks:{color:'#888',font:{size:7},maxRotation:45},grid:{display:false}},y:{ticks:{color:'#888',callback:v=>v+'%'},grid:{color:gC()}}},plugins:{...cB.plugins}},plugins:[{id:'line100',afterDraw(chart){const y=chart.scales.y.getPixelForValue(100);if(y){const ctx=chart.ctx;ctx.save();ctx.beginPath();ctx.setLineDash([6,4]);ctx.moveTo(chart.chartArea.left,y);ctx.lineTo(chart.chartArea.right,y);ctx.strokeStyle='#FFB800';ctx.lineWidth=2;ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#FFB800';ctx.font='bold 10px DM Sans';ctx.textAlign='right';ctx.fillText('100%',chart.chartArea.right,y-5);ctx.restore()}}}]});
 
 // Incentivo evolution chart (monthly avg achievement)
 if(charts.incEvol)charts.incEvol.destroy();
-const avgEne=incEne.length?incEne.reduce((a,b)=>a+b,0)/incEne.length:0;
-const avgFeb=incFeb.length?incFeb.reduce((a,b)=>a+b,0)/incFeb.length:0;
-const avgMar=incMar.length?incMar.reduce((a,b)=>a+b,0)/incMar.length:0;
-const storesAbove100Ene=incEne.filter(v=>v>=100).length;
-const storesAbove100Feb=incFeb.filter(v=>v>=100).length;
-const storesAbove100Mar=incMar.filter(v=>v>=100).length;
+const incAvgs=incMonths.map(m=>{const d=incData[m];return d.length?d.reduce((a,b)=>a+b,0)/d.length:0});
+const incAbove=incMonths.map(m=>incData[m].filter(v=>v>=100).length);
 charts.incEvol=safeChart('cIncEvol',{type:'bar',data:{
-labels:[t('mEne'),t('mFeb'),t('mMar')],
+labels:incMonths.map(m=>incMAbr[m]||m),
 datasets:[
-{label:t('pmStoresAbove')||'Tiendas ≥100%',data:[storesAbove100Ene,storesAbove100Feb,storesAbove100Mar],backgroundColor:[CC.cyan,CC.pink,CC.teal],borderRadius:5,yAxisID:'y',order:2},
-{label:'% '+t('pmAvg'),data:[avgEne,avgFeb,avgMar],type:'line',borderColor:CC.amber,pointBackgroundColor:CC.amber,pointRadius:6,borderWidth:2.5,tension:.3,yAxisID:'y1',order:1}
-]},options:{...cB,scales:{x:{grid:{display:false}},y:{position:'left',title:{display:true,text:t('pmStoresAbove')||'Tiendas ≥100%',color:'#888'},ticks:{color:'#888',stepSize:1},grid:{color:'#1f1f1f'}},y1:{position:'right',title:{display:true,text:'%',color:CC.amber},ticks:{color:CC.amber,callback:v=>v+'%'},grid:{drawOnChartArea:false}}}}});
+{label:t('pmStoresAbove')||'Tiendas ≥100%',data:incAbove,backgroundColor:incMonths.map((_,i)=>incColors[i%incColors.length]),borderRadius:5,yAxisID:'y',order:2},
+{label:'% '+t('pmAvg'),data:incAvgs,type:'line',borderColor:CC.amber,pointBackgroundColor:CC.amber,pointRadius:6,borderWidth:2.5,tension:.3,yAxisID:'y1',order:1}
+]},options:{...cB,scales:{x:{grid:{display:false}},y:{position:'left',title:{display:true,text:t('pmStoresAbove')||'Tiendas ≥100%',color:'#888'},ticks:{color:'#888',stepSize:1},grid:{color:gC()}},y1:{position:'right',title:{display:true,text:'%',color:CC.amber},ticks:{color:CC.amber,callback:v=>v+'%'},grid:{drawOnChartArea:false}}}}});
 
-// Incentivos table
+// Incentivos table - dynamic columns
 const allStores=[...new Set(inc.map(x=>x.store))];
-document.getElementById('tbInc').innerHTML=allStores.map(s=>{
-const e=inc.find(x=>x.store===s&&x.month==='Enero')||{target:'-',so:'-',pct:0};
-const f=inc.find(x=>x.store===s&&x.month==='Febrero')||{target:'-',so:'-',pct:0};
-const m=inc.find(x=>x.store===s&&x.month==='Marzo')||{target:'-',so:'-',pct:0};
+const incTHead=document.querySelector('#tbInc').closest('table').querySelector('thead tr');
+if(incTHead){incTHead.innerHTML='<th data-t="thStore">Tienda</th>'+incMonths.map(m=>'<th>'+incMAbr[m]+' TGT</th><th>'+incMAbr[m]+' SO</th><th>'+incMAbr[m]+' %</th>').join('')}
 const pctStyle=p=>{const v=p*100;return v>=120?'color:#00FF88':v>=100?'color:var(--teal)':v>=80?'color:#66DDAA':v>=60?'color:var(--amber)':'color:var(--red)'};
-return`<tr><td><strong>${s}</strong></td><td>${e.target}</td><td>${e.so}</td><td style="${pctStyle(e.pct)}">${(e.pct*100).toFixed(0)}%</td><td>${f.target}</td><td>${f.so}</td><td style="${pctStyle(f.pct)}">${(f.pct*100).toFixed(0)}%</td><td>${m.target}</td><td>${m.so}</td><td style="${pctStyle(m.pct)}">${(m.pct*100).toFixed(0)}%</td></tr>`}).join('');
+document.getElementById('tbInc').innerHTML=allStores.map(s=>{
+const cells=incMonths.map(m=>{const r=inc.find(x=>x.store===s&&x.month===m)||{target:'-',so:'-',pct:0};return`<td>${r.target}</td><td>${r.so}</td><td style="${pctStyle(r.pct)}">${(r.pct*100).toFixed(0)}%</td>`}).join('');
+return`<tr><td><strong>${s}</strong></td>${cells}</tr>`}).join('');
 
 // Promotor insights
 const avgH=(totS/totH).toFixed(2);
 const topStore=stores[0];const botStore=stores[stores.length-1];
-const avgInc=incMar.reduce((a,b)=>a+b,0)/incMar.length;
+const lastIncMonth=incMonths[incMonths.length-1];const lastIncData=incData[lastIncMonth]||[];
+const avgInc=lastIncData.length?lastIncData.reduce((a,b)=>a+b,0)/lastIncData.length:0;
 document.getElementById('pmIns').innerHTML=[
 {tag:'Eficiencia',t:topStore[0]+' — '+(topStore[1].salesPerHour)+' '+t('pmUdsH'),p:t('pmInsTop')||('Top efficiency vs network avg '+avgH+' uds/h')},
 {tag:'Alerta',t:botStore[0]+' — '+(botStore[1].salesPerHour)+' '+t('pmUdsH'),p:t('pmInsBot')||'Requires diagnosis: traffic, training, or insufficient coverage?'},
-{tag:'Incentivos',t:t('mMar')+': '+avgInc.toFixed(0)+'%',p:avgInc<60?(t('pmInsInc')||'Action required'):(t('pmInsIncOk')||'On track')},
+{tag:'Incentivos',t:(lastIncMonth||'Último')+': '+avgInc.toFixed(0)+'%',p:avgInc<60?(t('pmInsInc')||'Action required'):(t('pmInsIncOk')||'On track')},
 ].map(x=>`<div class="ins"><div class="ins-tag">${x.tag}</div><div class="ins-txt"><strong>${x.t}</strong> ${x.p}</div></div>`).join('');
 }
 </script>
@@ -640,11 +638,13 @@ let smStore='';
 function renderSimulador(){
 const d=D[ch];if(!d||!d.tiendas||!d.tiendas.length)return;
 const sim={};
+const smNW=Object.keys(d.weekly||{}).length||13;const smNM=d.meses.length;
+const smWkMap=[];{let w=1;for(let i=0;i<smNM;i++){const cnt=i===0?5:4;const end=i===smNM-1?smNW:Math.min(w+cnt-1,smNW);const s=[];for(let j=w;j<=end;j++)s.push(j);smWkMap.push(s);w=end+1}}
+const smMAbr={Enero:'Ene',Febrero:'Feb',Marzo:'Mar',Abril:'Abr',Mayo:'May',Junio:'Jun',Julio:'Jul',Agosto:'Ago',Septiembre:'Sep',Octubre:'Oct',Noviembre:'Nov',Diciembre:'Dic'};
 d.tiendas.forEach(ti=>{
 const wkData=d.semTienda[ti.n]||{};const stR=d.semTiendaRev[ti.n]||{};
-const monthly=[{m:'Ene',u:0,f:0},{m:'Feb',u:0,f:0},{m:'Mar',u:0,f:0}];
-const mSems=[[1,2,3,4,5],[6,7,8,9],[10,11,12,13]];
-mSems.forEach((ss,mi)=>{ss.forEach(w=>{monthly[mi].u+=(wkData[w]||0);monthly[mi].f+=(stR[w]||0)})});
+const monthly=d.meses.map((mes,mi)=>({m:smMAbr[mes.n]||mes.n.slice(0,3),u:0,f:0}));
+smWkMap.forEach((ss,mi)=>{ss.forEach(w=>{monthly[mi].u+=(wkData[w]||0);monthly[mi].f+=(stR[w]||0)})});
 const gR={};(d.gamas||[]).forEach(g=>{gR[g.n]=g.u/d.kpis.units});
 const sG={};Object.entries(gR).forEach(([g,r])=>{sG[g]=Math.round(ti.u*r)});
 const dR=(d.dias||[]).map(x=>x.u/d.kpis.units);
@@ -659,7 +659,7 @@ sel.onchange=()=>{smStore=sel.value;renderSimulador()};
 const s=sim[smStore];if(!s)return;
 
 // Averages across network
-const avgM=[0,0,0],avgF=[0,0,0];
+const avgM=new Array(smNM).fill(0),avgF=new Array(smNM).fill(0);
 storeNames.forEach(sn=>{sim[sn].monthly.forEach((m,i)=>{avgM[i]+=m.u;avgF[i]+=m.f})});
 avgM.forEach((_,i)=>{avgM[i]=Math.round(avgM[i]/storeNames.length);avgF[i]=Math.round(avgF[i]/storeNames.length)});
 const avgNet=Math.round(storeNames.reduce((a,sn)=>a+sim[sn].totalU,0)/storeNames.length);
@@ -682,7 +682,7 @@ document.getElementById('smKG').innerHTML=[
 charts.smM=safeChart('cSmM',{type:'bar',data:{labels:s.monthly.map(m=>m.m),datasets:[
 {label:smStore.replace('ECI ',''),data:s.monthly.map(m=>m.u),backgroundColor:CC.cyan,borderRadius:5,order:2},
 {label:t('wkMedia'),data:avgM,type:'line',borderColor:CC.pink,pointBackgroundColor:CC.pink,pointRadius:5,borderWidth:2.5,tension:.3,order:1}
-]},options:{...cB,scales:{x:{grid:{display:false}},y:{ticks:{color:'#888'},grid:{color:'#1f1f1f'}}}}});
+]},options:{...cB,scales:{x:{grid:{display:false}},y:{ticks:{color:'#888'},grid:{color:gC()}}}}});
 
 // 2. Ticket medio mensual (cSmTk)
 const sTk=s.monthly.map(m=>m.u>0?Math.round(m.f/m.u):0);
@@ -690,48 +690,49 @@ const aTk=avgM.map((u,i)=>u>0?Math.round(avgF[i]/u):0);
 charts.smTk=safeChart('cSmTk',{type:'line',data:{labels:s.monthly.map(m=>m.m),datasets:[
 {label:smStore.replace('ECI ',''),data:sTk,borderColor:CC.cyan,pointBackgroundColor:CC.cyan,pointRadius:5,borderWidth:2.5,tension:.3},
 {label:t('wkMedia'),data:aTk,borderColor:CC.pink+'88',pointRadius:4,borderWidth:2,borderDash:[5,3],tension:.3}
-]},options:{...cB,scales:{x:{grid:{display:false}},y:{ticks:{color:'#888',callback:v=>v+'€'},grid:{color:'#1f1f1f'}}}}});
+]},options:{...cB,scales:{x:{grid:{display:false}},y:{ticks:{color:'#888',callback:v=>v+'€'},grid:{color:gC()}}}}});
 
 // 3. Position in network (cSmPos)
 const pos=s.monthly.map((m,mi)=>{const all=storeNames.map(sn=>sim[sn].monthly[mi].u).sort((a,b)=>b-a);return all.indexOf(m.u)+1});
 charts.smPos=safeChart('cSmPos',{type:'bar',data:{labels:s.monthly.map(m=>m.m),datasets:[
 {data:pos,backgroundColor:pos.map(p=>p<=3?CC.teal:p<=8?CC.cyan:CC.amber),borderRadius:5}
-]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{reverse:true,min:1,max:storeNames.length,title:{display:true,text:t('posLabel'),color:'#888'},ticks:{color:'#888',stepSize:1},grid:{color:'#1f1f1f'}}}}});
+]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{reverse:true,min:1,max:storeNames.length,title:{display:true,text:t('posLabel'),color:'#888'},ticks:{color:'#888',stepSize:1},grid:{color:gC()}}}}});
 
 // 4. Productivity (cSmProd)
-const mWks=[[1,2,3,4,5],[6,7,8,9],[10,11,12,13]];
-const sProd=s.monthly.map((m,mi)=>{const d=mWks[mi].filter(w=>(s.weekly[w]||0)>0).length*5.5;return d>0?+(m.u/d).toFixed(2):0});
-const aProd=avgM.map((u,mi)=>{const d=mWks[mi].length*5.5;return d>0?+(u/d).toFixed(2):0});
+const sProd=s.monthly.map((m,mi)=>{const d=smWkMap[mi].filter(w=>(s.weekly[w]||0)>0).length*5.5;return d>0?+(m.u/d).toFixed(2):0});
+const aProd=avgM.map((u,mi)=>{const d=smWkMap[mi].length*5.5;return d>0?+(u/d).toFixed(2):0});
 charts.smProd=safeChart('cSmProd',{type:'bar',data:{labels:s.monthly.map(m=>m.m),datasets:[
 {label:smStore.replace('ECI ',''),data:sProd,backgroundColor:CC.teal,borderRadius:5},
 {label:t('wkMedia'),data:aProd,backgroundColor:CC.purple+'55',borderRadius:5}
-]},options:{...cB,scales:{x:{grid:{display:false}},y:{ticks:{color:'#888'},grid:{color:'#1f1f1f'}}}}});
+]},options:{...cB,scales:{x:{grid:{display:false}},y:{ticks:{color:'#888'},grid:{color:gC()}}}}});
 
 // 5. Weekly (cSmW)
 const wks=Object.keys(s.weekly).map(Number).sort((a,b)=>a-b);
 charts.smW=safeChart('cSmW',{type:'line',data:{labels:wks.map(w=>'S'+w),datasets:[
 {data:wks.map(w=>s.weekly[w]),borderColor:CC.cyan,backgroundColor:CC.cyan+'15',fill:true,tension:.35,pointRadius:3,borderWidth:2.5}
-]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1f1f1f'}}}}});
+]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:gC()}}}}});
 
 // 6. Gama donut (cSmG)
 const gE=Object.entries(s.gama).filter(([_,v])=>v>0).sort((a,b)=>b[1]-a[1]);
-charts.smG=safeChart('cSmG',{type:'doughnut',data:{labels:gE.map(([n])=>String(n)),datasets:[{data:gE.map(([_,v])=>v),backgroundColor:[CC.cyan,CC.pink,CC.teal,CC.amber],borderColor:'#111',borderWidth:2}]},options:{...donutOpts}});
+charts.smG=safeChart('cSmG',{type:'doughnut',data:{labels:gE.map(([n])=>String(n)),datasets:[{data:gE.map(([_,v])=>v),backgroundColor:[CC.cyan,CC.pink,CC.teal,CC.amber],borderColor:document.documentElement.classList.contains('light')?'#fff':'#111',borderWidth:2}]},options:{...donutOpts}});
 
 // 7. Daily pattern (cSmD)
 const dN=lang==='en'?['Mon','Tue','Wed','Thu','Fri','Sat','Sun']:lang==='cn'?['周一','周二','周三','周四','周五','周六','周日']:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 const dMx=Math.max(...s.dias);
-charts.smD=safeChart('cSmD',{type:'bar',data:{labels:dN,datasets:[{data:s.dias,backgroundColor:s.dias.map(v=>v===dMx?CC.cyan:CC.cyan+'55'),borderRadius:5}]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:'#1f1f1f'}}}}});
+charts.smD=safeChart('cSmD',{type:'bar',data:{labels:dN,datasets:[{data:s.dias,backgroundColor:s.dias.map(v=>v===dMx?CC.cyan:CC.cyan+'55'),borderRadius:5}]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:gC()}}}}});
 
-// 8. Consecución % (cSmCon) - only for SI channel with incentivos
-const inc=D.incentivos||[];
-const storeInc=inc.filter(x=>x.store===smStore);
-const months=[t('mEne'),t('mFeb'),t('mMar')];
-const pcts=months.map((_,i)=>{const m=['Enero','Febrero','Marzo'][i];const r=storeInc.find(x=>x.month===m);return r?+(r.pct*100).toFixed(0):0});
+// 8. Consecución % (cSmCon) - all months with incentivos
+const smInc=D.incentivos||[];
+const storeInc=smInc.filter(x=>x.store===smStore);
+const smIncOrd={Noviembre:1,Diciembre:2,Enero:3,Febrero:4,Marzo:5,Abril:6,Mayo:7,Junio:8,Julio:9,Agosto:10,Septiembre:11,Octubre:12};
+const smIncAbr={Noviembre:'Nov',Diciembre:'Dic',Enero:'Ene',Febrero:'Feb',Marzo:'Mar',Abril:'Abr'};
+const smIncMonths=[...new Set(smInc.map(x=>x.month))].sort((a,b)=>(smIncOrd[a]||13)-(smIncOrd[b]||13));
+const smPcts=smIncMonths.map(m=>{const r=storeInc.find(x=>x.month===m);return r?+(r.pct*100).toFixed(0):0});
 if(storeInc.length){
-charts.smCon=safeChart('cSmCon',{type:'bar',data:{labels:months,datasets:[
-{data:pcts,backgroundColor:pcts.map(p=>p>=100?CC.teal:p>=80?'#66bb6a':p>=60?CC.amber:CC.red),borderRadius:5},
-{label:'100%',data:[100,100,100],type:'line',borderColor:CC.amber,borderWidth:2,borderDash:[6,3],pointRadius:0}
-]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{ticks:{color:'#888',callback:v=>v+'%'},grid:{color:'#1f1f1f'}}}}});
+charts.smCon=safeChart('cSmCon',{type:'bar',data:{labels:smIncMonths.map(m=>smIncAbr[m]||m.slice(0,3)),datasets:[
+{data:smPcts,backgroundColor:smPcts.map(p=>p>=100?CC.teal:p>=80?'#66bb6a':p>=60?CC.amber:CC.red),borderRadius:5},
+{label:'100%',data:smIncMonths.map(()=>100),type:'line',borderColor:CC.amber,borderWidth:2,borderDash:[6,3],pointRadius:0}
+]},options:{...cB,plugins:{...cB.plugins,legend:{display:false}},scales:{x:{grid:{display:false}},y:{ticks:{color:'#888',callback:v=>v+'%'},grid:{color:gC()}}}}});
 }
 
 // Summary table
