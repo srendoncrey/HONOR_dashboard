@@ -217,19 +217,14 @@ def parse_horarios(xls_h, sheet_name):
     return records
 
 
-def parse_incentivos(xls_a, sheet, month):
-    """Parsea una hoja de incentivos.
+def parse_incentivos_targets(xls_a, sheet, month):
+    """Parsea una hoja de incentivos extrayendo SOLO los targets por tienda.
 
-    Detecta dinámicamente el formato de la hoja:
-    - 'total_mes': hay columna 'TOTAL MES' en fila 3 → SO y % en esa columna
-    - 'tiered': formato Entry/Mid/High → suma SOs de cols 7, 11, 15
-
-    Deduplica por tienda: si la hoja tiene dos bloques de datos (ej. FEBRERO),
-    conserva el último registro de cada tienda (datos más actualizados).
+    El SO real se obtiene de la BBDD, no de las columnas de la hoja de incentivos.
+    Deduplica por tienda (first occurrence wins).
     """
     inc = pd.read_excel(xls_a, sheet_name=sheet, header=None)
-    fmt, so_col = _detect_incentivo_format(inc)
-    seen = {}  # store -> record (last occurrence wins)
+    seen = {}
     for r in range(5, inc.shape[0]):
         tienda = inc.iloc[r, 0]
         if pd.isna(tienda) or 'TOTAL' in str(tienda).upper():
@@ -240,38 +235,10 @@ def parse_incentivos(xls_a, sheet, month):
         tgt = inc.iloc[r, 1]
         if pd.isna(tgt) or not isinstance(tgt, (int, float)):
             continue
-        if fmt == 'total_mes':
-            so = inc.iloc[r, so_col] if so_col < inc.shape[1] and pd.notna(inc.iloc[r, so_col]) else 0
-            pct = inc.iloc[r, so_col + 1] if (so_col + 1) < inc.shape[1] and pd.notna(inc.iloc[r, so_col + 1]) else 0
-        else:
-            # Tiered: sum Entry SO (col7) + Mid SO (col11) + High SO (col15)
-            e_so = inc.iloc[r, 7] if 7 < inc.shape[1] and pd.notna(inc.iloc[r, 7]) else 0
-            m_so = inc.iloc[r, 11] if 11 < inc.shape[1] and pd.notna(inc.iloc[r, 11]) else 0
-            h_so = inc.iloc[r, 15] if 15 < inc.shape[1] and pd.notna(inc.iloc[r, 15]) else 0
-            so = sum(v for v in [e_so, m_so, h_so] if isinstance(v, (int, float)))
-            pct = so / float(tgt) if tgt > 0 else 0
-        seen[tienda] = {
-            'store': tienda, 'month': month,
-            'target': int(tgt), 'so': int(so) if isinstance(so, (int, float)) else 0,
-            'pct': round(float(pct), 3) if isinstance(pct, (int, float)) else 0
-        }
+        if tienda in seen:
+            continue
+        seen[tienda] = {'store': tienda, 'month': month, 'target': int(tgt)}
     return list(seen.values())
-
-
-def _detect_incentivo_format(inc):
-    """Detecta el formato y columna SO de una hoja de incentivos.
-
-    Escanea la fila 3 en busca de 'TOTAL' para identificar el layout dinámicamente.
-    Devuelve ('total_mes', so_col) o ('tiered', 7).
-    """
-    if inc.shape[0] > 3:
-        for c in range(inc.shape[1]):
-            cell = str(inc.iloc[3, c]).strip().upper()
-            if 'TOTAL' in cell and 'PREVISION' not in cell:
-                # Verify row 4 at this col has 'SO'
-                if inc.shape[0] > 4 and 'SO' in str(inc.iloc[4, c]).upper():
-                    return ('total_mes', c)
-    return ('tiered', 7)
 
 
 def main():
@@ -343,15 +310,30 @@ def main():
     print(f"  {len(promo_data)} tiendas promotor procesadas")
 
     # ===== INCENTIVOS =====
+    # Targets vienen de las hojas de incentivos; SO real viene de BBDD
     print("Procesando incentivos...")
     xls_a = pd.ExcelFile(analisis_file)
     incentivo_sheets = detect_incentivo_sheets(xls_a)
     print(f"  Hojas de incentivos detectadas: {[(s, m) for s, m in incentivo_sheets]}")
+
+    # SO por tienda y mes desde BBDD (fuente real de sell-out)
+    bbdd_so = filt.groupby(['Tienda Honor', 'Mes'])['Sell Qty'].sum()
+
     inc_all = []
+    meses_2026 = {'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                  'Julio', 'Agosto', 'Septiembre', 'Octubre'}
     for sheet, month in incentivo_sheets:
-        inc_all.extend(parse_incentivos(xls_a, sheet, month))
+        if month not in meses_2026:
+            continue
+        targets = parse_incentivos_targets(xls_a, sheet, month)
+        mes_lower = month.lower()
+        for rec in targets:
+            so = int(bbdd_so.get((rec['store'], mes_lower), 0))
+            rec['so'] = so
+            rec['pct'] = round(so / rec['target'], 3) if rec['target'] > 0 else 0
+        inc_all.extend(targets)
     data['incentivos'] = inc_all
-    print(f"  {len(inc_all)} registros de incentivos")
+    print(f"  {len(inc_all)} registros de incentivos (SO desde BBDD)")
 
     # ===== GUARDAR =====
     os.makedirs(os.path.dirname(output), exist_ok=True)
