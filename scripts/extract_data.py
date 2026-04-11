@@ -229,7 +229,7 @@ def parse_incentivos(xls_a, sheet, month):
     """
     inc = pd.read_excel(xls_a, sheet_name=sheet, header=None)
     fmt, so_col = _detect_incentivo_format(inc)
-    seen = {}  # store -> record (last occurrence wins)
+    seen = {}  # store -> record (first valid occurrence wins)
     for r in range(5, inc.shape[0]):
         tienda = inc.iloc[r, 0]
         if pd.isna(tienda) or 'TOTAL' in str(tienda).upper():
@@ -244,12 +244,17 @@ def parse_incentivos(xls_a, sheet, month):
             so = inc.iloc[r, so_col] if so_col < inc.shape[1] and pd.notna(inc.iloc[r, so_col]) else 0
             pct = inc.iloc[r, so_col + 1] if (so_col + 1) < inc.shape[1] and pd.notna(inc.iloc[r, so_col + 1]) else 0
         else:
-            # Tiered: sum Entry SO (col7) + Mid SO (col11) + High SO (col15)
-            e_so = inc.iloc[r, 7] if 7 < inc.shape[1] and pd.notna(inc.iloc[r, 7]) else 0
-            m_so = inc.iloc[r, 11] if 11 < inc.shape[1] and pd.notna(inc.iloc[r, 11]) else 0
-            h_so = inc.iloc[r, 15] if 15 < inc.shape[1] and pd.notna(inc.iloc[r, 15]) else 0
-            so = sum(v for v in [e_so, m_so, h_so] if isinstance(v, (int, float)))
+            # Tiered: sum all individual SO columns
+            so_vals = []
+            for c in so_col:
+                v = inc.iloc[r, c] if c < inc.shape[1] and pd.notna(inc.iloc[r, c]) else 0
+                if isinstance(v, (int, float)):
+                    so_vals.append(v)
+            so = sum(so_vals)
             pct = so / float(tgt) if tgt > 0 else 0
+        # Keep first valid occurrence (block 1 has complete data)
+        if tienda in seen:
+            continue
         seen[tienda] = {
             'store': tienda, 'month': month,
             'target': int(tgt), 'so': int(so) if isinstance(so, (int, float)) else 0,
@@ -261,17 +266,39 @@ def parse_incentivos(xls_a, sheet, month):
 def _detect_incentivo_format(inc):
     """Detecta el formato y columna SO de una hoja de incentivos.
 
-    Escanea la fila 3 en busca de 'TOTAL' para identificar el layout dinámicamente.
-    Devuelve ('total_mes', so_col) o ('tiered', 7).
+    Si la fila 3 tiene cabeceras 'Entry'/'Mid'/'High' → tiered (suma SOs individuales).
+    Si NO tiene tiers y tiene 'TOTAL' con 'SO' debajo → total_mes (SO directo).
+    Devuelve ('total_mes', so_col) o ('tiered', so_cols_list).
     """
-    if inc.shape[0] > 3:
+    if inc.shape[0] <= 3:
+        return ('tiered', [7, 11, 15])
+
+    # Check for tiered headers (Entry/Mid/High)
+    has_tiers = False
+    for c in range(inc.shape[1]):
+        cell = str(inc.iloc[3, c]).strip().upper()
+        if cell in ('ENTRY', 'MID', 'HIGH'):
+            has_tiers = True
+            break
+
+    if has_tiers:
+        # Find ALL individual SO columns (row 4 = 'SO', row 3 != 'TOTAL')
+        so_cols = []
         for c in range(inc.shape[1]):
-            cell = str(inc.iloc[3, c]).strip().upper()
-            if 'TOTAL' in cell and 'PREVISION' not in cell:
-                # Verify row 4 at this col has 'SO'
-                if inc.shape[0] > 4 and 'SO' in str(inc.iloc[4, c]).upper():
-                    return ('total_mes', c)
-    return ('tiered', 7)
+            r4 = str(inc.iloc[4, c]).strip().upper() if inc.shape[0] > 4 else ''
+            r3 = str(inc.iloc[3, c]).strip().upper()
+            if r4 == 'SO' and 'TOTAL' not in r3:
+                so_cols.append(c)
+        return ('tiered', so_cols if so_cols else [7, 11, 15])
+
+    # No tiers → look for TOTAL MES format
+    for c in range(inc.shape[1]):
+        cell = str(inc.iloc[3, c]).strip().upper()
+        if 'TOTAL' in cell and 'PREVISION' not in cell:
+            if inc.shape[0] > 4 and 'SO' in str(inc.iloc[4, c]).upper():
+                return ('total_mes', c)
+
+    return ('tiered', [7, 11, 15])
 
 
 def main():
@@ -348,8 +375,12 @@ def main():
     incentivo_sheets = detect_incentivo_sheets(xls_a)
     print(f"  Hojas de incentivos detectadas: {[(s, m) for s, m in incentivo_sheets]}")
     inc_all = []
+    # Only include months from the latest year (skip Nov/Dec from previous year)
+    meses_2026 = {'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                  'Julio', 'Agosto', 'Septiembre', 'Octubre'}
     for sheet, month in incentivo_sheets:
-        inc_all.extend(parse_incentivos(xls_a, sheet, month))
+        if month in meses_2026:
+            inc_all.extend(parse_incentivos(xls_a, sheet, month))
     data['incentivos'] = inc_all
     print(f"  {len(inc_all)} registros de incentivos")
 
