@@ -1,88 +1,55 @@
 """
-HONOR Dashboard v5 — Script de refresco completo
-==================================================
+HONOR Dashboard — Pipeline completo de refresco
+=================================================
 Ejecuta todo el pipeline: extracción → inyección → validación
 
 USO:
-    python3 refresh_dashboard.py Analisis_Honor_2025__v3_.xlsx Horarios_HONOR.xlsx HONOR_Dashboard_v5.html
+    python3 refresh_dashboard.py
 
-Esto:
-1. Extrae datos del Excel (BBDD + Horarios + Incentivos)
-2. Serializa a JSON
-3. Inyecta en el HTML del dashboard
-4. Valida que todo cuadra
+    Con rutas por defecto:
+      - Analisis: data/Analisis Honor 2025 (v3).xlsx
+      - Horarios: data/Horarios HONOR.xlsx
+      - Dashboard: output/HONOR_Dashboard_v5.html
+
+    O con rutas personalizadas:
+    python3 refresh_dashboard.py <analisis.xlsx> <horarios.xlsx> <dashboard.html>
 """
 
 import sys
 import os
-import re
-import shutil
 import json
 
-# Import the extraction module
+# Asegurar que el directorio raíz del proyecto está en el path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from extract_data_01 import main as extract_main, get_channel_metrics, parse_horarios, parse_incentivos
-from extract_data_01 import HORARIOS_SHEETS, HORARIOS_STORE_MAP, INCENTIVOS_SHEETS
-import pandas as pd
+
+from scripts.extract_data import main as extract_main
+from scripts.inject_data import inject
+from scripts.validate import validate
+
+# Rutas por defecto
+DEFAULT_ANALISIS = os.path.join('data', 'Analisis Honor 2025 (v3).xlsx')
+DEFAULT_HORARIOS = os.path.join('data', 'Horarios HONOR.xlsx')
+DEFAULT_DASHBOARD = os.path.join('output', 'HONOR_Dashboard_v5.html')
+DEFAULT_JSON = os.path.join('output', 'dashboard_data.json')
 
 
 def refresh(analisis_file, horarios_file, html_file):
     print("=" * 60)
-    print("HONOR Dashboard v5 — Refresco completo")
+    print("HONOR Dashboard — Refresco completo")
     print("=" * 60)
 
     # Step 1: Extract
     print("\n📊 PASO 1: Extracción de datos...")
-    sys.argv = ['', analisis_file, horarios_file]
+    sys.argv = ['', analisis_file, horarios_file, '--output', DEFAULT_JSON]
     data = extract_main()
 
-    # Step 2: Serialize
-    data_json = json.dumps(data, separators=(',',':'))
-    print(f"\n📦 PASO 2: JSON generado ({len(data_json):,} chars)")
+    # Step 2: Inject into HTML
+    print(f"\n💉 PASO 2: Inyectando en {html_file}...")
+    inject(DEFAULT_JSON, html_file)
 
-    # Step 3: Inject into HTML
-    print(f"\n💉 PASO 3: Inyectando en {html_file}...")
-    with open(html_file) as f:
-        html = f.read()
-
-    match = re.search(r'const D=\{.*?\};', html, re.DOTALL)
-    if not match:
-        print("❌ No se encontró 'const D={...};' en el HTML")
-        return False
-
-    old_size = len(match.group())
-    html = html.replace(match.group(), f'const D={data_json};')
-
-    # Backup
-    backup = html_file + '.bak'
-    shutil.copy2(html_file, backup)
-    with open(html_file, 'w') as f:
-        f.write(html)
-    print(f"   Datos: {old_size:,} → {len(data_json)+10:,} chars")
-    print(f"   Backup: {backup}")
-
-    # Step 4: Validate
-    print(f"\n✅ PASO 4: Validación...")
-    df = pd.read_excel(analisis_file, sheet_name='BBDD')
-    filt = df[df['Año'] == 2026]
-    
-    errors = 0
-    for ch, fltr in [('SI','SI'),('NO','NO'),('Online','Online'),('ALL',None)]:
-        sub = filt if fltr is None else filt[filt['Promotor']==fltr]
-        k = data[ch]['kpis']
-        real_u = int(sub['Sell Qty'].sum())
-        real_r = round(sub['Sales Value'].sum(), 2)
-        if k['units'] != real_u:
-            print(f"   ❌ {ch} units: {k['units']} vs {real_u}")
-            errors += 1
-        if abs(k['revenue'] - real_r) > 1:
-            print(f"   ❌ {ch} revenue: {k['revenue']} vs {real_r}")
-            errors += 1
-
-    if errors == 0:
-        print("   ✅ Validación OK — 0 errores")
-    else:
-        print(f"   ❌ {errors} errores encontrados")
+    # Step 3: Validate
+    print(f"\n🔍 PASO 3: Validación...")
+    success = validate(DEFAULT_JSON, analisis_file)
 
     # Summary
     print("\n" + "=" * 60)
@@ -93,20 +60,38 @@ def refresh(analisis_file, horarios_file, html_file):
         print(f"  {ch:8s}: {k['units']:>5} uds | {k['revenue']:>12.2f} € | TK {k['ticket']:>7.2f} € | {k['stores']} tiendas")
     print(f"\n  Promotores: {len(data.get('promotores',{}))} tiendas")
     print(f"  Incentivos: {len(data.get('incentivos',[]))} registros")
-    print(f"\n  Dashboard: {html_file} ({len(html):,} bytes)")
-    
-    return errors == 0
+    print(f"\n  Dashboard: {html_file}")
+
+    return success
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 4:
-        print("USO: python3 refresh_dashboard.py <analisis.xlsx> <horarios.xlsx> <dashboard.html>")
+    if len(sys.argv) >= 4:
+        analisis = sys.argv[1]
+        horarios = sys.argv[2]
+        dashboard = sys.argv[3]
+    elif len(sys.argv) == 1:
+        analisis = DEFAULT_ANALISIS
+        horarios = DEFAULT_HORARIOS
+        dashboard = DEFAULT_DASHBOARD
+    else:
+        print("USO: python3 refresh_dashboard.py [<analisis.xlsx> <horarios.xlsx> <dashboard.html>]")
+        print("")
+        print("Sin argumentos usa rutas por defecto:")
+        print(f"  Analisis:  {DEFAULT_ANALISIS}")
+        print(f"  Horarios:  {DEFAULT_HORARIOS}")
+        print(f"  Dashboard: {DEFAULT_DASHBOARD}")
         print("")
         print("También puedes ejecutar los scripts por separado:")
-        print("  python3 01_extract_data.py <analisis.xlsx> <horarios.xlsx>")
-        print("  python3 02_inject_data.py dashboard_data.json <dashboard.html>")
-        print("  python3 03_validate.py dashboard_data.json <analisis.xlsx>")
+        print("  python3 -m scripts.extract_data <analisis.xlsx> <horarios.xlsx>")
+        print("  python3 -m scripts.inject_data <data.json> <dashboard.html>")
+        print("  python3 -m scripts.validate <data.json> <analisis.xlsx>")
         sys.exit(1)
 
-    success = refresh(sys.argv[1], sys.argv[2], sys.argv[3])
+    for f in [analisis, horarios, dashboard]:
+        if not os.path.exists(f):
+            print(f"❌ Archivo no encontrado: {f}")
+            sys.exit(1)
+
+    success = refresh(analisis, horarios, dashboard)
     sys.exit(0 if success else 1)

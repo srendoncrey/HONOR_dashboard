@@ -1,19 +1,22 @@
 """
-HONOR Dashboard v5 — Script 1: Extracción de datos
-===================================================
+HONOR Dashboard — Script 1: Extracción de datos
+=================================================
 Extrae todos los datos del Excel y genera un JSON para inyectar en el dashboard.
+Soporta todos los meses del año (auto-detecta hojas disponibles).
 
 USO:
-    python3 01_extract_data.py Analisis_Honor_2025__v3_.xlsx Horarios_HONOR.xlsx
+    python3 -m scripts.extract_data data/analisis.xlsx data/horarios.xlsx
+    python3 -m scripts.extract_data data/analisis.xlsx data/horarios.xlsx --output output/dashboard_data.json
 
 SALIDA:
-    dashboard_data.json
+    output/dashboard_data.json (por defecto)
 """
 
 import pandas as pd
 import json
 import sys
 import os
+import re
 
 # ===== CONFIGURACIÓN =====
 STORE_COORDS = {
@@ -39,10 +42,70 @@ HORARIOS_STORE_MAP = {
     'ECI ÁLCALA DE HENARES': 'ECI ALCALA DE HENARES'
 }
 
-HORARIOS_SHEETS = ['ENERO 26', 'FEB 2026', 'MAR 2026']
-INCENTIVOS_SHEETS = [('INCENTIVOS ENERO ', 'Enero'), ('INCENTIVOS FEBRERO', 'Febrero'), ('INCENTIVOS MARZO', 'Marzo')]
 DIA_ORDER = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo']
-MES_ORDER = {'enero':1,'febrero':2,'marzo':3}
+
+MES_ORDER = {
+    'enero':1, 'febrero':2, 'marzo':3, 'abril':4, 'mayo':5, 'junio':6,
+    'julio':7, 'agosto':8, 'septiembre':9, 'octubre':10, 'noviembre':11, 'diciembre':12
+}
+
+# Patrones para auto-detectar hojas de horarios e incentivos
+_HORARIO_PATTERN = re.compile(
+    r'(ENERO|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)', re.IGNORECASE
+)
+_INCENTIVO_PATTERN = re.compile(
+    r'INCENTIVOS?\s+(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)',
+    re.IGNORECASE
+)
+_MONTH_ABBR_TO_FULL = {
+    'ENERO': 'Enero', 'FEB': 'Febrero', 'MAR': 'Marzo', 'ABR': 'Abril',
+    'MAY': 'Mayo', 'JUN': 'Junio', 'JUL': 'Julio', 'AGO': 'Agosto',
+    'SEP': 'Septiembre', 'OCT': 'Octubre', 'NOV': 'Noviembre', 'DIC': 'Diciembre',
+    'FEBRERO': 'Febrero', 'MARZO': 'Marzo', 'ABRIL': 'Abril', 'MAYO': 'Mayo',
+    'JUNIO': 'Junio', 'JULIO': 'Julio', 'AGOSTO': 'Agosto',
+    'SEPTIEMBRE': 'Septiembre', 'OCTUBRE': 'Octubre', 'NOVIEMBRE': 'Noviembre',
+    'DICIEMBRE': 'Diciembre'
+}
+
+
+def detect_horario_sheets(xls):
+    """Auto-detecta hojas de horarios en el Excel.
+    Si hay variantes de un mismo mes (e.g. DICIEMBRE V1, V2), usa la ultima."""
+    by_month = {}
+    for name in xls.sheet_names:
+        upper = name.upper()
+        if _HORARIO_PATTERN.search(name) and 'INCENTIVO' not in upper and 'PREVISION' not in upper:
+            order = _sheet_month_order(name)
+            # Si ya hay una hoja para este mes, quedarse con la ultima (V2 > V1)
+            if order not in by_month or name > by_month[order]:
+                by_month[order] = name
+    return [by_month[k] for k in sorted(by_month.keys())]
+
+
+def detect_incentivo_sheets(xls):
+    """Auto-detecta hojas de incentivos en el Excel.
+    Excluye hojas de PREVISION y si hay duplicados por mes, usa la primera."""
+    by_month = {}
+    for name in xls.sheet_names:
+        upper = name.upper()
+        if 'PREVISION' in upper:
+            continue
+        m = _INCENTIVO_PATTERN.search(name)
+        if m:
+            month_full = _MONTH_ABBR_TO_FULL.get(m.group(1).upper(), m.group(1).capitalize())
+            order = MES_ORDER.get(month_full.lower(), 99)
+            if order not in by_month:
+                by_month[order] = (name, month_full)
+    return [by_month[k] for k in sorted(by_month.keys())]
+
+
+def _sheet_month_order(sheet_name):
+    """Devuelve el orden numerico del mes de una hoja."""
+    upper = sheet_name.upper()
+    for abbr, full in _MONTH_ABBR_TO_FULL.items():
+        if abbr in upper:
+            return MES_ORDER.get(full.lower(), 99)
+    return 99
 
 
 def get_channel_metrics(d):
@@ -118,7 +181,7 @@ def get_channel_metrics(d):
     sem_tienda_rev = {col: {int(k): round(v) for k,v in st_r[col].items()} for col in st_r.columns}
 
     return {
-        'kpis': {'units': total_u, 'revenue': total_r, 'stores': tiendas, 'models': modelos, 
+        'kpis': {'units': total_u, 'revenue': total_r, 'stores': tiendas, 'models': modelos,
                  'ticket': ticket, 'weeks': semanas, 'avgWeek': media_sem},
         'models': models, 'zonas': zonas, 'gamas': gamas, 'cats': cats,
         'meses': meses, 'tiendas': tiendas_list, 'weekly': weekly, 'weeklyRev': weekly_rev,
@@ -158,6 +221,8 @@ def parse_incentivos(xls_a, sheet, month):
     """Parsea una hoja de incentivos."""
     inc = pd.read_excel(xls_a, sheet_name=sheet, header=None)
     results = []
+    # Detectar si es el último mes disponible (formato diferente)
+    is_latest = _is_latest_incentivo_sheet(inc)
     for r in range(5, inc.shape[0]):
         tienda = inc.iloc[r, 0]
         if pd.isna(tienda) or 'TOTAL' in str(tienda).upper():
@@ -165,7 +230,7 @@ def parse_incentivos(xls_a, sheet, month):
         tgt = inc.iloc[r, 1]
         if pd.isna(tgt) or not isinstance(tgt, (int, float)):
             continue
-        if month == 'Marzo':
+        if is_latest:
             so = inc.iloc[r, 6] if pd.notna(inc.iloc[r, 6]) else 0
             pct = inc.iloc[r, 7] if pd.notna(inc.iloc[r, 7]) else 0
         else:
@@ -182,14 +247,25 @@ def parse_incentivos(xls_a, sheet, month):
     return results
 
 
+def _is_latest_incentivo_sheet(inc):
+    """Detecta si una hoja de incentivos es del último mes (formato simplificado)."""
+    # El último mes tiene menos columnas (solo datos parciales)
+    return inc.shape[1] < 12
+
+
 def main():
     if len(sys.argv) < 3:
-        print("USO: python3 01_extract_data.py <analisis_honor.xlsx> <horarios.xlsx>")
-        print("     Genera dashboard_data.json")
+        print("USO: python3 -m scripts.extract_data <analisis_honor.xlsx> <horarios.xlsx> [--output FILE]")
+        print("     Genera output/dashboard_data.json por defecto")
         sys.exit(1)
 
     analisis_file = sys.argv[1]
     horarios_file = sys.argv[2]
+    output = 'output/dashboard_data.json'
+    if '--output' in sys.argv:
+        idx = sys.argv.index('--output')
+        if idx + 1 < len(sys.argv):
+            output = sys.argv[idx + 1]
 
     print(f"Leyendo {analisis_file}...")
     df = pd.read_excel(analisis_file, sheet_name='BBDD')
@@ -208,7 +284,7 @@ def main():
         data[ch_name] = get_channel_metrics(subset)
         k = data[ch_name]['kpis']
         print(f"  {ch_name:8s}: {k['units']:>5} uds | {k['revenue']:>12.2f} € | TK {k['ticket']:>7.2f}")
-    
+
     data['ALL'] = get_channel_metrics(filt)
     k = data['ALL']['kpis']
     print(f"  {'ALL':8s}: {k['units']:>5} uds | {k['revenue']:>12.2f} € | TK {k['ticket']:>7.2f}")
@@ -216,8 +292,10 @@ def main():
     # ===== HORARIOS =====
     print(f"\nLeyendo {horarios_file}...")
     xls_h = pd.ExcelFile(horarios_file)
+    horario_sheets = detect_horario_sheets(xls_h)
+    print(f"  Hojas de horarios detectadas: {horario_sheets}")
     h_all = []
-    for s in HORARIOS_SHEETS:
+    for s in horario_sheets:
         h_all.extend(parse_horarios(xls_h, s))
     horarios_df = pd.DataFrame(h_all)
     horarios_df['bbdd_store'] = horarios_df['store'].map(lambda x: HORARIOS_STORE_MAP.get(x, x))
@@ -244,17 +322,19 @@ def main():
     # ===== INCENTIVOS =====
     print("Procesando incentivos...")
     xls_a = pd.ExcelFile(analisis_file)
+    incentivo_sheets = detect_incentivo_sheets(xls_a)
+    print(f"  Hojas de incentivos detectadas: {[(s, m) for s, m in incentivo_sheets]}")
     inc_all = []
-    for sheet, month in INCENTIVOS_SHEETS:
+    for sheet, month in incentivo_sheets:
         inc_all.extend(parse_incentivos(xls_a, sheet, month))
     data['incentivos'] = inc_all
     print(f"  {len(inc_all)} registros de incentivos")
 
     # ===== GUARDAR =====
-    output = 'dashboard_data.json'
+    os.makedirs(os.path.dirname(output), exist_ok=True)
     with open(output, 'w') as f:
         json.dump(data, f, separators=(',',':'))
-    
+
     print(f"\n✅ Datos guardados en {output} ({os.path.getsize(output):,} bytes)")
     return data
 

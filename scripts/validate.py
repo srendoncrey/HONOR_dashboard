@@ -1,10 +1,10 @@
 """
-HONOR Dashboard v5 — Script 3: Validación de datos
-====================================================
+HONOR Dashboard — Script 3: Validación de datos
+=================================================
 Cruza los datos del JSON contra el Excel original para verificar que todo cuadra.
 
 USO:
-    python3 03_validate.py dashboard_data.json Analisis_Honor_2025__v3_.xlsx
+    python3 -m scripts.validate output/dashboard_data.json data/Analisis\ Honor\ 2025\ \(v3\).xlsx
 """
 
 import pandas as pd
@@ -12,14 +12,8 @@ import json
 import sys
 
 
-def main():
-    if len(sys.argv) < 3:
-        print("USO: python3 03_validate.py <data.json> <analisis.xlsx>")
-        sys.exit(1)
-
-    data_file = sys.argv[1]
-    excel_file = sys.argv[2]
-
+def validate(data_file, excel_file):
+    """Valida JSON vs Excel. Retorna True si no hay errores."""
     with open(data_file) as f:
         D = json.load(f)
 
@@ -87,7 +81,6 @@ def main():
         print("✅ TODOS LOS DATOS CORRECTOS — 0 errores")
     print("=" * 50)
 
-    # Summary
     for ch in ['SI','NO','Online','ALL']:
         k = D[ch]['kpis']
         print(f"  {ch:8s}: {k['units']:>5} uds | {k['revenue']:>12.2f} € | TK {k['ticket']:>7.2f}")
@@ -95,6 +88,14 @@ def main():
     return len(errors) == 0
 
 
-if __name__ == '__main__':
-    success = main()
+def main():
+    if len(sys.argv) < 3:
+        print("USO: python3 -m scripts.validate <data.json> <analisis.xlsx>")
+        sys.exit(1)
+
+    success = validate(sys.argv[1], sys.argv[2])
     sys.exit(0 if success else 1)
+
+
+if __name__ == '__main__':
+    main()
