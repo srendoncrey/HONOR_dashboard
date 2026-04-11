@@ -7,6 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0a0a;--sf:#111;--sf2:#1a1a1a;--sf3:#222;--cyan:#00B1FF;--pink:#FF00D0;--purple:#7B00FF;--teal:#00D4AA;--amber:#FFB800;--coral:#FF6B35;--red:#FF4444;--white:#fff;--text:#e8e8e8;--muted:#888;--brd:#2a2a2a;--font:'DM Sans',sans-serif;--mono:'Space Mono',monospace}
@@ -60,6 +62,11 @@ h2 .dot{width:6px;height:6px;border-radius:50%}
 .sel{font-family:var(--mono);font-size:.6rem;padding:.3rem .6rem;background:var(--sf2);border:1px solid var(--brd);border-radius:6px;color:var(--text);cursor:pointer}
 .sel:focus{outline:none;border-color:var(--cyan)}
 footer{text-align:center;padding:1.5rem;font-family:var(--mono);font-size:.5rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--brd);margin-top:1rem}
+.leaflet-container{background:var(--bg)!important;font-family:var(--font)}
+.map-tip{background:var(--sf2)!important;border:1px solid var(--brd)!important;color:var(--text)!important;border-radius:6px!important;box-shadow:0 4px 14px rgba(0,0,0,.5)!important;padding:6px 8px!important}
+.map-tip::before{border-top-color:var(--sf2)!important}
+.leaflet-control-zoom a{background:var(--sf2)!important;color:var(--text)!important;border-color:var(--brd)!important}
+.leaflet-control-zoom a:hover{background:var(--sf3)!important}
 </style>
 </head>
 <body>
@@ -99,7 +106,7 @@ footer{text-align:center;padding:1.5rem;font-family:var(--mono);font-size:.5rem;
 <div class="kg" id="kG"></div>
 <div class="cr"><div class="cc"><h3 data-t="gamaTitle">Ventas por gama</h3><div class="cw" style="height:300px"><canvas id="cGama"></canvas></div></div><div class="cc"><h3 data-t="zonaTitle">Facturación por zona</h3><div class="cw" style="height:300px"><canvas id="cZona"></canvas></div></div></div>
 <div class="cr"><div class="cc"><h3 data-t="monthTitle" data-t="smMonth">Evolución mensual</h3><div class="cw" style="height:300px"><canvas id="cMes"></canvas></div></div><div class="cc"><h3 data-t="weekTitle">Evolución semanal</h3><div class="cw" style="height:300px"><canvas id="cSem"></canvas></div></div></div>
-<div class="cr"><div class="cc" id="mapC"><h3 data-t="mapTitle">Mapa de ventas por tienda</h3><p class="sub" data-t="mapSub">Solo canal Promotor</p><div style="position:relative"><canvas id="cMap" height="400"></canvas><div class="mt" id="mT"></div></div><div id="mL" style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap"></div></div><div class="cc"><h3 data-t="vsTitle">400 vs MAGIC (semanal)</h3><div class="cw" style="height:360px"><canvas id="cVs"></canvas></div></div></div>
+<div class="cr"><div class="cc" id="mapC"><h3 data-t="mapTitle">Mapa de ventas por provincia</h3><p class="sub" data-t="mapSub">Solo canal Promotor — clic en provincia para detalle</p><div id="cMap" style="height:420px;border-radius:7px;overflow:hidden;background:#0a0a0a"></div><div id="mapDrill" style="display:none;margin-top:8px;padding:10px;background:var(--sf2);border-radius:7px;border:1px solid var(--brd)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><strong id="drillTitle" style="color:var(--white);font-size:.8rem"></strong><button onclick="mapDrillClose()" style="background:none;border:1px solid var(--brd);color:var(--muted);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:.6rem">Volver</button></div><div id="drillBody" style="font-size:.72rem"></div></div><div id="mL" style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap"></div></div><div class="cc"><h3 data-t="vsTitle">400 vs MAGIC (semanal)</h3><div class="cw" style="height:360px"><canvas id="cVs"></canvas></div></div></div>
 </div>
 
 <!-- PRODUCTO -->
@@ -169,7 +176,7 @@ es:{
 tab_ov:'Resumen',tab_pr:'Producto',tab_st:'Tiendas',tab_wk:'Semanal',tab_pm:'Promotores',tab_sm:'Simulador',tab_in:'Insights',f_si:'Promotor',f_no:'Sin Promotor',f_ol:'Online',f_all:'Todos',pmInsTop:'Casi el doble de la media de la red. Analizar buenas prácticas de este promotor para replicar.',pmInsBot:'Requiere diagnóstico: problema de tráfico, formación o cobertura horaria insuficiente.',pmInsInc:'Acción urgente: refuerzo de campañas, revisión de stock o ajuste de targets.',pmInsIncOk:'Rendimiento en línea con objetivos. Mantener presión comercial.',pmEvol:'Productividad mensual por tienda',pmEvolSub:'Uds/día trabajado — Ene vs Feb vs Mar',pmEvol:'Evolución mensual de consecución',pmStoresAbove:'Tiendas ≥100%',pmWithPromotor:'Con promotor',pmWithoutPromotor:'Sin promotor (ECI)',mEne:'Enero',mFeb:'Febrero',mMar:'Marzo',units:'Unidades',revenue:'Facturación',stores:'Tiendas',models:'Modelos',ticket:'Ticket medio',avgW:'Media/sem',
 q1:'Q1 2026',total:'Total',active:'Activas',sold:'Vendidos',revUds:'Rev/Uds',udsW:'Uds/semana',
 gamaTitle:'Ventas por gama',zonaTitle:'Facturación por zona',monthTitle:'Evolución mensual',weekTitle:'Evolución semanal',
-mapTitle:'Mapa de ventas por tienda',mapSub:'Solo canal Promotor',vsTitle:'400 vs MAGIC (semanal)',
+mapTitle:'Mapa de ventas por provincia',mapSub:'Solo canal Promotor — clic en provincia para detalle',vsTitle:'400 vs MAGIC (semanal)',
 topMod:'Top modelos',catMix:'Mix por categoría',rankMod:'Ranking de modelos',
 rankSt:'Ranking de tiendas',zoneMonth:'Zonas por mes',dayTitle:'Ventas por día',storeDetail:'Detalle por tienda',
 wkTitle:'Análisis semanal',wkAll:'Todas',wkUds:'Uds semana',wkFact:'Facturación',wkVsAnt:'vs anterior',wkVsAvg:'vs media trim.',wkTk:'Ticket sem.',wkSem:'Semana',
@@ -191,7 +198,7 @@ en:{
 tab_ov:'Overview',tab_pr:'Product',tab_st:'Stores',tab_wk:'Weekly',tab_pm:'Promoters',tab_sm:'Simulator',tab_in:'Insights',f_si:'Promoter',f_no:'No Promoter',f_ol:'Online',f_all:'All',pmInsTop:'Nearly double the network average. Analyze this promoter\'s best practices to replicate.',pmInsBot:'Requires diagnosis: traffic issues, training gaps, or insufficient coverage.',pmInsInc:'Urgent action: campaign reinforcement, stock review, or target adjustment.',pmInsIncOk:'Performance in line with targets. Maintain commercial pressure.',pmEvol:'Monthly productivity by store',pmEvolSub:'Units/work day — Jan vs Feb vs Mar',pmEvol:'Monthly achievement evolution',pmStoresAbove:'Stores ≥100%',pmWithPromotor:'With promoter',pmWithoutPromotor:'Without promoter (ECI)',mEne:'January',mFeb:'February',mMar:'March',units:'Units',revenue:'Revenue',stores:'Stores',models:'Models',ticket:'Avg. ticket',avgW:'Weekly avg.',
 q1:'Q1 2026',total:'Total',active:'Active',sold:'Sold',revUds:'Rev/Units',udsW:'Units/week',
 gamaTitle:'Sales by range',zonaTitle:'Revenue by zone',monthTitle:'Monthly evolution',weekTitle:'Weekly evolution',
-mapTitle:'Sales map by store',mapSub:'Promoter channel only',vsTitle:'400 vs MAGIC (weekly)',
+mapTitle:'Sales map by province',mapSub:'Promoter channel only — click province for details',vsTitle:'400 vs MAGIC (weekly)',
 topMod:'Top models',catMix:'Category mix',rankMod:'Model ranking',
 rankSt:'Store ranking',zoneMonth:'Zones by month',dayTitle:'Sales by day',storeDetail:'Store detail',
 wkTitle:'Weekly analysis',wkAll:'All',wkUds:'Week units',wkFact:'Revenue',wkVsAnt:'vs previous',wkVsAvg:'vs quarter avg.',wkTk:'Week ticket',wkSem:'Week',
@@ -213,7 +220,7 @@ cn:{
 tab_ov:'概览',tab_pr:'产品',tab_st:'门店',tab_wk:'周报',tab_pm:'促销员',tab_sm:'模拟器',tab_in:'洞察',f_si:'促销员',f_no:'无促销员',f_ol:'在线',f_all:'全部',pmInsTop:'几乎是网络平均水平的两倍。分析该促销员的最佳实践并推广。',pmInsBot:'需要诊断：客流问题、培训不足或覆盖时间不够。',pmInsInc:'紧急行动：加强促销、检查库存或调整目标。',pmInsIncOk:'业绩符合目标。保持商业压力。',pmEvol:'各门店月度产能',pmEvolSub:'台/工作日 — 1月 vs 2月 vs 3月',pmEvol:'月度达成走势',pmStoresAbove:'达标门店数',pmWithPromotor:'有促销员',pmWithoutPromotor:'无促销员(ECI自售)',mEne:'一月',mFeb:'二月',mMar:'三月',units:'销量',revenue:'营业额',stores:'门店',models:'型号',ticket:'客单价',avgW:'周均',
 q1:'2026年Q1',total:'总计',active:'活跃',sold:'已售',revUds:'营收/数量',udsW:'台/周',
 gamaTitle:'按系列销售',zonaTitle:'按区域营收',monthTitle:'月度走势',weekTitle:'周度走势',
-mapTitle:'门店销售地图',mapSub:'仅促销员渠道',vsTitle:'400 vs MAGIC（周度）',
+mapTitle:'按省份销售地图',mapSub:'仅促销员渠道 — 点击省份查看详情',vsTitle:'400 vs MAGIC（周度）',
 topMod:'热门型号',catMix:'品类组合',rankMod:'型号排名',
 rankSt:'门店排名',zoneMonth:'区域月度对比',dayTitle:'按星期销售',storeDetail:'门店详情',
 wkTitle:'周度分析',wkAll:'全部',wkUds:'周销量',wkFact:'营收',wkVsAnt:'vs上周',wkVsAvg:'vs季度均值',wkTk:'周客单价',wkSem:'第几周',
@@ -296,25 +303,119 @@ document.getElementById('inG').innerHTML=(T[lang].ins||[]).map(x=>`<div class="i
 renderWeekly();renderPromotores();renderSimulador();applyI18n();
 }
 
+let leafMap=null,geoLayer=null;
+// Store → Province mapping (names match GeoJSON spain-provinces.geojson)
+const STORE_PROV={
+'ECI GUADALAJARA':'Guadalajara','ECI TALAVERA':'Toledo',
+'ECI PAMPLONA':'Navarra','ECI SAN JOSE VALDERAS':'Madrid','ECI ALCALA DE HENARES':'Madrid',
+'ECI ZARAGOZA':'Zaragoza','ECI LA CORUÑA':'A Coruña','ECI PLAZA DEL DUQUE':'Sevilla',
+'ECI RONDA DE CORDOBA':'Córdoba','ECI SALAMANCA':'Salamanca','ECI LEON':'León',
+'ECI COSTA LUZ':'Cádiz','ECI COSTA MIJAS':'Málaga','ECI BAHIA MALAGA':'Málaga',
+'ECI CORNELLA':'Barcelona'
+};
+// Store coordinates (approx city center)
+const STORE_COORDS={
+'ECI GUADALAJARA':[40.633,-3.167],'ECI TALAVERA':[39.963,-4.831],
+'ECI PAMPLONA':[42.817,-1.645],'ECI SAN JOSE VALDERAS':[40.343,-3.835],
+'ECI ALCALA DE HENARES':[40.482,-3.364],'ECI ZARAGOZA':[41.649,-0.887],
+'ECI LA CORUÑA':[43.370,-8.396],'ECI PLAZA DEL DUQUE':[37.393,-5.997],
+'ECI RONDA DE CORDOBA':[37.885,-4.779],'ECI SALAMANCA':[40.965,-5.664],
+'ECI LEON':[42.599,-5.567],'ECI BAHIA MALAGA':[36.720,-4.420],
+'ECI COSTA LUZ':[36.520,-6.280],'ECI COSTA MIJAS':[36.595,-4.636],
+'ECI CORNELLA':[41.354,2.070]
+};
+// Province → Zone mapping
+const PROV_ZONE={
+'Guadalajara':'Centro','Toledo':'Centro','Madrid':'Centro','Salamanca':'Centro','León':'Centro',
+'Cuenca':'Centro','Ciudad Real':'Centro','Segovia':'Centro','Valladolid':'Centro','Burgos':'Centro',
+'Palencia':'Centro','Soria':'Centro','Zamora':'Centro','Ávila':'Centro','Cáceres':'Centro',
+'Badajoz':'Centro','Albacete':'Centro',
+'Navarra':'Norte','A Coruña':'Norte','Lugo':'Norte','Ourense':'Norte','Pontevedra':'Norte',
+'Asturias':'Norte','Cantabria':'Norte','La Rioja':'Norte',
+'Sevilla':'Sur','Córdoba':'Sur','Cádiz':'Sur','Málaga':'Sur','Granada':'Sur',
+'Jaén':'Sur','Huelva':'Sur','Almería':'Sur','Murcia':'Sur',
+'Zaragoza':'Noreste','Barcelona':'Noreste','Girona':'Noreste','Lleida':'Noreste',
+'Tarragona':'Noreste','Huesca':'Noreste','Teruel':'Noreste',
+'Araba/Álava':'Norte','Bizkaia/Vizcaya':'Norte','Gipuzkoa/Guipúzcoa':'Norte',
+'Alacant/Alicante':'Noreste','Castelló/Castellón':'Noreste','València/Valencia':'Noreste',
+'Illes Balears':'Noreste','Las Palmas':'Sur','Santa Cruz De Tenerife':'Sur'
+};
+function mapDrillClose(){document.getElementById('mapDrill').style.display='none';if(leafMap)leafMap.flyTo([39.5,-3],6,{duration:.6})}
 function renderMap(d){
-const cv=document.getElementById('cMap');if(!cv||!d.map||!d.map.length)return;
-const dpr=Math.min(devicePixelRatio||1,2),w=cv.parentElement.clientWidth-2,h=400;
-cv.width=w*dpr;cv.height=h*dpr;cv.style.width=w+'px';cv.style.height=h+'px';
-const x=cv.getContext('2d');x.scale(dpr,dpr);
-const pad=24,mw=w-pad*2,mh=h-pad*2;
-const proj=(lat,lon)=>({x:pad+(lon-(-9.5))/(4.5-(-9.5))*mw,y:pad+(43.8-lat)/(43.8-35.8)*mh});
-const outline=[[43.3,-8.2],[43.4,-5.8],[43.5,-3.8],[43.4,-1.8],[42.8,-.5],[42.5,.7],[42.4,3.1],[41.3,2.2],[40.7,.7],[40.5,.3],[39.9,-.1],[38.7,-.1],[37.8,-.1],[37.6,-1.6],[36.7,-2.1],[36.4,-4.4],[36.1,-5.3],[36.7,-6.3],[37,-7.4],[37.2,-7.5],[38.7,-9],[39.5,-9.2],[39.9,-8.3],[40.2,-8.5],[41.2,-8.9],[41.9,-8.8],[42.1,-8.1],[42.8,-9.3],[43.3,-8.2]];
-x.beginPath();outline.forEach((p,i)=>{const pt=proj(p[0],p[1]);i?x.lineTo(pt.x,pt.y):x.moveTo(pt.x,pt.y)});x.closePath();x.fillStyle='#1a1a1a';x.fill();x.strokeStyle='#333';x.lineWidth=1.5;x.stroke();
+const el=document.getElementById('cMap');if(!el||!d.tiendas||!d.tiendas.length)return;
 const zc={'Centro':'#00B1FF','Norte':'#FF00D0','Sur':'#7B00FF','Noreste':'#00D4AA'};
-const mU=Math.max(...d.map.map(s=>s.u));const bubs=[];
-d.map.forEach(st=>{const pt=proj(st.lat,st.lon);const r=Math.max(8,Math.min(28,(st.u/mU)*28));const col=zc[st.z]||'#00B1FF';
-x.beginPath();x.arc(pt.x,pt.y,r,0,Math.PI*2);x.fillStyle=col+'70';x.fill();x.strokeStyle=col;x.lineWidth=1.5;x.stroke();
-x.font='600 7px DM Sans';x.fillStyle='#ccc';x.textAlign='center';x.fillText(st.n.replace('ECI ',''),pt.x,pt.y-r-3);
-x.font='700 9px DM Sans';x.fillStyle='#fff';x.fillText(st.u,pt.x,pt.y+3);bubs.push({px:pt.x,py:pt.y,r,st})});
-const tip=document.getElementById('mT');
-cv.onmousemove=e=>{const rect=cv.getBoundingClientRect();const mx=e.clientX-rect.left,my=e.clientY-rect.top;let f=false;for(const b of bubs){if(Math.sqrt((mx-b.px)**2+(my-b.py)**2)<b.r*1.3){tip.innerHTML=`<strong style="color:#fff">${b.st.n}</strong><br>${b.st.z} · ${fmt(b.st.u)} uds · ${fmtE(b.st.f)}`;tip.style.left=(mx+12)+'px';tip.style.top=(my-10)+'px';tip.style.opacity='1';f=true;break}}if(!f)tip.style.opacity='0'};
-cv.onmouseleave=()=>tip.style.opacity='0';
+if(leafMap){leafMap.remove();leafMap=null}
+leafMap=L.map('cMap',{center:[39.5,-3],zoom:6,zoomControl:true,attributionControl:false,scrollWheelZoom:true});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',{maxZoom:14,minZoom:5}).addTo(leafMap);
+const mU=Math.max(...d.tiendas.map(s=>s.u));
+// Group stores by province
+const provStores={};
+d.tiendas.forEach(st=>{const pv=STORE_PROV[st.n];if(pv){if(!provStores[pv])provStores[pv]=[];provStores[pv].push(st)}});
+// Place store markers
+d.tiendas.forEach(st=>{
+const coords=STORE_COORDS[st.n];if(!coords)return;
+const col=zc[st.z]||'#00B1FF';
+const r=Math.max(6,Math.min(22,(st.u/mU)*22));
+L.circleMarker(coords,{radius:r,fillColor:col,fillOpacity:.55,color:col,weight:2})
+.bindTooltip(`<div style="font-family:DM Sans;font-size:11px"><strong>${st.n.replace('ECI ','')}</strong><br><span style="color:${col}">${st.z}</span> · ${fmt(st.u)} uds · ${fmtE(st.f)}</div>`,{direction:'top',className:'map-tip'})
+.on('click',()=>{
+const pv=STORE_PROV[st.n]||'';
+const stores=provStores[pv]||[st];
+showDrilldown(pv||st.n,stores,zc);
+leafMap.flyTo(coords,10,{duration:.5});
+}).addTo(leafMap);
+L.marker(coords,{icon:L.divIcon({className:'',html:`<div style="font-family:DM Sans;font-size:8px;font-weight:700;color:#fff;text-align:center;text-shadow:0 1px 3px #000;white-space:nowrap;pointer-events:none;transform:translateX(-50%)">${st.u}</div>`,iconSize:[50,14],iconAnchor:[25,-r+2]})}).addTo(leafMap);
+});
+// Fetch provinces GeoJSON and overlay boundaries
+fetch('https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/spain-provinces.geojson')
+.then(r=>{if(!r.ok)throw new Error();return r.json()})
+.then(geo=>{
+geoLayer=L.geoJSON(geo,{
+style:f=>{
+const nm=f.properties.name||'';
+const zone=PROV_ZONE[nm];
+const hasStores=!!provStores[nm];
+return{fillColor:zone?(zc[zone]||'#333'):'transparent',fillOpacity:hasStores?.18:zone?.04:0,color:zone?(zc[zone]||'#444'):'#222',weight:hasStores?1.5:.5,dashArray:hasStores?'':'3 3'}},
+onEachFeature:(f,layer)=>{
+const nm=f.properties.name||'';
+const zone=PROV_ZONE[nm];
+const stores=provStores[nm];
+if(zone){
+layer.bindTooltip(`<div style="font-family:DM Sans;font-size:11px"><strong>${nm}</strong><br><span style="color:${zc[zone]||'#888'}">${zone}</span>${stores?' · '+stores.reduce((s,x)=>s+x.u,0)+' uds':''}</div>`,{sticky:true,className:'map-tip'});
+}
+if(stores&&stores.length){
+layer.on('click',()=>{
+showDrilldown(nm,stores,zc);
+leafMap.flyToBounds(layer.getBounds(),{padding:[30,30],duration:.5});
+});
+}
+layer.on('mouseover',()=>{if(zone)layer.setStyle({fillOpacity:stores?.3:.1,weight:2})});
+layer.on('mouseout',()=>{geoLayer.resetStyle(layer)});
+}
+}).addTo(leafMap);
+leafMap.getPane('markerPane').style.zIndex=650;
+}).catch(()=>{});
 document.getElementById('mL').innerHTML=Object.entries(zc).map(([z,c])=>`<span style="display:flex;align-items:center;gap:4px;font-size:.6rem;color:#888"><span style="width:8px;height:8px;border-radius:50%;background:${c}70;border:1.5px solid ${c};display:inline-block"></span>${z}</span>`).join('');
+setTimeout(()=>{leafMap.invalidateSize()},100);
+}
+function showDrilldown(region,stores,zc){
+const dp=document.getElementById('mapDrill');
+document.getElementById('drillTitle').textContent=region+' — '+stores.length+' tienda'+(stores.length>1?'s':'');
+const sorted=stores.slice().sort((a,b)=>b.u-a.u);
+const totalU=sorted.reduce((s,x)=>s+x.u,0);
+const totalF=sorted.reduce((s,x)=>s+x.f,0);
+let h='<table style="width:100%;border-collapse:collapse">';
+h+='<tr style="border-bottom:1px solid var(--brd)"><th style="text-align:left;padding:3px 6px;color:var(--muted);font-size:.55rem;font-family:var(--mono)">TIENDA</th><th style="text-align:right;padding:3px 6px;color:var(--muted);font-size:.55rem">UDS</th><th style="text-align:right;padding:3px 6px;color:var(--muted);font-size:.55rem">FACT.</th><th style="text-align:right;padding:3px 6px;color:var(--muted);font-size:.55rem">TICKET</th><th style="text-align:right;padding:3px 6px;color:var(--muted);font-size:.55rem">%</th></tr>';
+sorted.forEach(s=>{
+const tk=s.u?Math.round(s.f/s.u):0;
+const pct=(s.u/totalU*100).toFixed(1);
+const col=zc[s.z]||'#00B1FF';
+h+=`<tr style="border-bottom:1px solid var(--brd)"><td style="padding:4px 6px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:5px"></span>${s.n.replace('ECI ','')}</td><td style="text-align:right;padding:4px 6px;color:var(--white);font-weight:600">${fmt(s.u)}</td><td style="text-align:right;padding:4px 6px">${fmtE(s.f)}</td><td style="text-align:right;padding:4px 6px">${fmtE(tk)}</td><td style="text-align:right;padding:4px 6px;font-family:var(--mono)">${pct}%</td></tr>`;
+});
+h+=`<tr style="font-weight:700;color:var(--white)"><td style="padding:4px 6px">TOTAL</td><td style="text-align:right;padding:4px 6px">${fmt(totalU)}</td><td style="text-align:right;padding:4px 6px">${fmtE(totalF)}</td><td style="text-align:right;padding:4px 6px">${fmtE(totalU?Math.round(totalF/totalU):0)}</td><td style="text-align:right;padding:4px 6px">100%</td></tr>`;
+h+='</table>';
+document.getElementById('drillBody').innerHTML=h;
+dp.style.display='block';
 }
 </script>
 
