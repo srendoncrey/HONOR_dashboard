@@ -218,39 +218,60 @@ def parse_horarios(xls_h, sheet_name):
 
 
 def parse_incentivos(xls_a, sheet, month):
-    """Parsea una hoja de incentivos."""
+    """Parsea una hoja de incentivos.
+
+    Detecta dinámicamente el formato de la hoja:
+    - 'total_mes': hay columna 'TOTAL MES' en fila 3 → SO y % en esa columna
+    - 'tiered': formato Entry/Mid/High → suma SOs de cols 7, 11, 15
+
+    Deduplica por tienda: si la hoja tiene dos bloques de datos (ej. FEBRERO),
+    conserva el último registro de cada tienda (datos más actualizados).
+    """
     inc = pd.read_excel(xls_a, sheet_name=sheet, header=None)
-    results = []
-    # Detectar si es el último mes disponible (formato diferente)
-    is_latest = _is_latest_incentivo_sheet(inc)
+    fmt, so_col = _detect_incentivo_format(inc)
+    seen = {}  # store -> record (last occurrence wins)
     for r in range(5, inc.shape[0]):
         tienda = inc.iloc[r, 0]
         if pd.isna(tienda) or 'TOTAL' in str(tienda).upper():
             continue
+        tienda = str(tienda).strip()
+        if not tienda.startswith('ECI'):
+            continue
         tgt = inc.iloc[r, 1]
         if pd.isna(tgt) or not isinstance(tgt, (int, float)):
             continue
-        if is_latest:
-            so = inc.iloc[r, 6] if pd.notna(inc.iloc[r, 6]) else 0
-            pct = inc.iloc[r, 7] if pd.notna(inc.iloc[r, 7]) else 0
+        if fmt == 'total_mes':
+            so = inc.iloc[r, so_col] if so_col < inc.shape[1] and pd.notna(inc.iloc[r, so_col]) else 0
+            pct = inc.iloc[r, so_col + 1] if (so_col + 1) < inc.shape[1] and pd.notna(inc.iloc[r, so_col + 1]) else 0
         else:
+            # Tiered: sum Entry SO (col7) + Mid SO (col11) + High SO (col15)
             e_so = inc.iloc[r, 7] if 7 < inc.shape[1] and pd.notna(inc.iloc[r, 7]) else 0
             m_so = inc.iloc[r, 11] if 11 < inc.shape[1] and pd.notna(inc.iloc[r, 11]) else 0
             h_so = inc.iloc[r, 15] if 15 < inc.shape[1] and pd.notna(inc.iloc[r, 15]) else 0
             so = sum(v for v in [e_so, m_so, h_so] if isinstance(v, (int, float)))
-            pct = so / tgt if tgt > 0 else 0
-        results.append({
-            'store': str(tienda).strip(), 'month': month,
-            'target': int(tgt), 'so': int(so) if isinstance(so,(int,float)) else 0,
-            'pct': round(float(pct), 3) if isinstance(pct,(int,float)) else 0
-        })
-    return results
+            pct = so / float(tgt) if tgt > 0 else 0
+        seen[tienda] = {
+            'store': tienda, 'month': month,
+            'target': int(tgt), 'so': int(so) if isinstance(so, (int, float)) else 0,
+            'pct': round(float(pct), 3) if isinstance(pct, (int, float)) else 0
+        }
+    return list(seen.values())
 
 
-def _is_latest_incentivo_sheet(inc):
-    """Detecta si una hoja de incentivos es del último mes (formato simplificado)."""
-    # El último mes tiene menos columnas (solo datos parciales)
-    return inc.shape[1] < 12
+def _detect_incentivo_format(inc):
+    """Detecta el formato y columna SO de una hoja de incentivos.
+
+    Escanea la fila 3 en busca de 'TOTAL' para identificar el layout dinámicamente.
+    Devuelve ('total_mes', so_col) o ('tiered', 7).
+    """
+    if inc.shape[0] > 3:
+        for c in range(inc.shape[1]):
+            cell = str(inc.iloc[3, c]).strip().upper()
+            if 'TOTAL' in cell and 'PREVISION' not in cell:
+                # Verify row 4 at this col has 'SO'
+                if inc.shape[0] > 4 and 'SO' in str(inc.iloc[4, c]).upper():
+                    return ('total_mes', c)
+    return ('tiered', 7)
 
 
 def main():
@@ -269,8 +290,10 @@ def main():
 
     print(f"Leyendo {analisis_file}...")
     df = pd.read_excel(analisis_file, sheet_name='BBDD')
-    filt = df[df['Año'] == 2026].copy()
-    print(f"  {len(filt)} registros 2026")
+    # Usar el año más reciente disponible en el BBDD
+    latest_year = int(df['Año'].max())
+    filt = df[df['Año'] == latest_year].copy()
+    print(f"  {len(filt)} registros {latest_year}")
 
     # ===== CANALES =====
     channels = {
