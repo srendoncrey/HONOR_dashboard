@@ -73,11 +73,30 @@ Requiere: `pandas >= 2.0`, `openpyxl >= 3.1`
 ## Reglas de datos importantes
 
 | Regla | Detalle |
-|-------|---------|
+|-------|--------|
 | **Ticket medio** | Siempre `facturacion / unidades`, NUNCA promediar la columna Ticket Medio |
 | **Gama (gamA)** | Usar `str()` para comparaciones — puede ser int 400 o string '400' |
 | **Horarios → BBDD** | Mapeo de nombres obligatorio (ver `HORARIOS_STORE_MAP` en extract_data.py) |
 | **Meses** | Se auto-detectan las hojas disponibles en los Excel (soporta todo el ano) |
+
+## GitHub Pages (deploy automatico)
+
+El dashboard se publica automaticamente en GitHub Pages cada vez que se actualizan los Excel.
+
+**URL**: `https://srendoncrey.github.io/HONOR_dashboard/`
+
+### Configuracion inicial (una sola vez)
+
+1. Ir a **Settings > Pages** en el repositorio de GitHub
+2. En **Source**, seleccionar **GitHub Actions**
+
+### Flujo automatico
+
+```
+Push Excel a data/ → GitHub Actions ejecuta pipeline → HTML actualizado → Deploy a Pages
+```
+
+Tambien se puede ejecutar manualmente desde la tab **Actions** > **Refresh Dashboard & Deploy to Pages** > **Run workflow**.
 
 ## Estructura del JSON generado
 

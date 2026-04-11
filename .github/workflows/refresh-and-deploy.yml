@@ -1,0 +1,72 @@
+name: Refresh Dashboard & Deploy to Pages
+
+on:
+  push:
+    branches: [main, development]
+    paths:
+      - 'data/*.xlsx'
+      - 'output/*.html'
+      - 'scripts/**'
+      - 'refresh_dashboard.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run refresh pipeline
+        run: python3 refresh_dashboard.py
+
+      - name: Commit updated dashboard
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-refresh dashboard data"
+          file_pattern: 'output/HONOR_Dashboard_v5.html'
+
+  deploy:
+    needs: refresh
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Pull latest changes
+        run: git pull origin ${{ github.ref_name }}
+
+      - name: Prepare Pages artifact
+        run: |
+          mkdir -p _site
+          cp output/HONOR_Dashboard_v5.html _site/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
