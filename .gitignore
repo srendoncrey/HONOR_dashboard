@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.bak
+.DS_Store
+*.tmp
+output/dashboard_data.json
